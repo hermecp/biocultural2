@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulación — Factibilidad Ecoturismo (demo optimista + satélite)</title>
+
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: '#16a34a',
+          line: '#d9e7df'
+        },
+        boxShadow: {
+          soft: '0 10px 24px rgba(0,0,0,.10)',
+          deep: '0 28px 72px rgba(0,0,0,.24)'
+        },
+        transitionProperty: {
+          'opacity-transform': 'opacity, transform'
+        }
+      }
+    }
+  }
+</script>
+
+<!-- Leaflet + Turf -->
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<!-- MathJax (opcional: ver cómo se calcula) -->
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['$','$'],['\\(','\\)']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+
+<style>
+  :root{ --b:#dcefe3; }
+
+  html,body,#app{height:100%}
+  body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+
+  #map{position:absolute;inset:0}
+
+  .bar>span{
+    display:block;height:8px;
+    background:linear-gradient(90deg,#f87171,#facc15,#22c55e);
+    transition:width .35s ease;
+  }
+
+  .chip, .chip-sm{
+    display:inline-flex;align-items:center;gap:.5rem;
+    border:1px solid var(--b);
+    border-radius:999px;
+    padding:.38rem .7rem;
+    font-size:.8rem;
+    background:#fff;
+  }
+  .chip[data-on="1"], .chip-sm[data-on="1"]{
+    background:#ecfdf5;
+    border-color:#b3f0d0;
+    color:#064e3b;
+    box-shadow:0 6px 16px rgba(5,94,40,.10);
+  }
+
+  .lvl, .lvl-sm{
+    display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--b);
+    border-radius:.7rem;
+    padding:.32rem .58rem;
+    font-size:.75rem;
+    min-width:3.2rem;
+    background:rgba(255,255,255,.9);
+  }
+  .lvl[data-active="1"], .lvl-sm[data-active="1"]{
+    background:#ecfdf5;
+    border-color:#b3f0d0;
+    color:#064e3b;
+    font-weight:700;
+    box-shadow:0 6px 16px rgba(5,94,40,.10);
+  }
+
+  .badge{
+    display:inline-flex;align-items:center;gap:.5rem;
+    padding:.35rem .6rem;
+    border:1px solid #b3f0d0;
+    background:#ecfdf5;
+    border-radius:999px;
+    color:#064e3b;
+  }
+
+  /* NAV (estilo institucional limpio) */
+  .nav{
+    background:#ffffff;
+    border-bottom:1px solid var(--b);
+    display:flex;align-items:center;gap:8px;
+    padding:6px 10px;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    position:relative;
+    z-index:70;
+  }
+  .nav a{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:8px 12px;
+    border-radius:999px;
+    text-decoration:none;
+    color:#0f3d26;
+    font-weight:600;
+    border:1px solid transparent;
+    white-space:nowrap;
+    font-size:13px;
+  }
+  .nav a:hover{
+    background:#f3faf6;
+    border-color:#dcefe3;
+  }
+  .nav a.active{
+    background:linear-gradient(180deg,#ecfdf5,#d1fae5);
+    color:#064e3b;
+    border-color:#b3f0d0;
+    box-shadow:0 6px 16px rgba(5,94,40,.12);
+  }
+
+  /* Paneles: HUD translúcido sobre satélite */
+  .panel-glass{
+    background:linear-gradient(180deg,rgba(6,78,59,.82),rgba(6,78,59,.76));
+    color:#eafff4;
+    border:1px solid rgba(163,230,196,.35);
+    backdrop-filter:saturate(1.1) blur(8px);
+  }
+  .panel-glass .text-muted{color:#d1fae5cf}
+
+  .panel-glass-dark{
+    background:linear-gradient(180deg,rgba(3,59,46,.92),rgba(3,59,46,.86));
+    color:#eafff4;
+    border:1px solid rgba(163,230,196,.38);
+    backdrop-filter:saturate(1.05) blur(8px);
+  }
+
+  .chip-sm{
+    gap:.35rem;
+    border:1px solid rgba(163,230,196,.45);
+    padding:.25rem .55rem;
+    font-size:.72rem;
+    line-height:1;
+    background:#ffffff;
+    color:#064e3b;
+  }
+  .chip-sm[data-on="1"]{
+    background:#bbf7d0;
+    border-color:#86efac;
+    color:#064e3b;
+    box-shadow:0 4px 10px rgba(5,94,40,.18);
+  }
+
+  .lvl-sm{
+    border:1px solid rgba(163,230,196,.45);
+    border-radius:.6rem;
+    padding:.22rem .46rem;
+    min-width:2.6rem;
+    font-size:.7rem;
+    line-height:1;
+    background:rgba(255,255,255,.9);
+    color:#065f46;
+  }
+  .lvl-sm[data-active="1"]{
+    background:#bbf7d0;
+    border-color:#86efac;
+    color:#064e3b;
+    font-weight:800;
+    box-shadow:0 4px 12px rgba(5,94,40,.18);
+  }
+
+  .btn-ghost{
+    border:1px solid rgba(163,230,196,.45);
+    background:rgba(255,255,255,.08);
+    color:#ecfdf5;
+  }
+  .btn-ghost:hover{ background:rgba(255,255,255,.16); }
+
+  .section-dark{
+    border:1px solid rgba(163,230,196,.38);
+    background:rgba(2,44,34,.22);
+  }
+
+  .label-xs{ font-size:.72rem; color:#A7F3D0; }
+
+  /* Etiquetas de municipios sin caja blanca: texto con halo */
+  .leaflet-tooltip.place-label{
+    background:transparent;border:none;color:#f0fdf4;
+    font-weight:800;letter-spacing:.2px;padding:0;
+    text-shadow:0 1px 2px rgba(0,0,0,.9),
+                 0 0 8px rgba(0,0,0,.6),
+                 0 0 14px rgba(0,0,0,.45);
+    pointer-events:none;
+  }
+  .hide-place-labels .leaflet-tooltip.place-label{
+    display:none;
+  }
+
+  /* Animación de entrada para las celdas */
+  .hex-pane path,
+  .hex-pane polygon{
+    animation:fadeInHex .45s ease both;
+  }
+  @keyframes fadeInHex{
+    from{opacity:0;transform:scale(.98)}
+    to{opacity:.55;transform:scale(1)}
+  }
+</style>
+</head>
+<body class="font-sans text-gray-800">
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="index.html"><i class="fa-solid fa-house"></i> Inicio</a>
+  <a href="pois.html"><i class="fa-solid fa-landmark"></i> POIs &amp; Patrimonio</a>
+  <a href="modelos.html" class="active"><i class="fa-solid fa-diagram-project"></i> Modelos de idoneidad</a>
+  <a href="participacion.html"><i class="fa-solid fa-users"></i> Participación</a>
+  <a href="#"><i class="fa-solid fa-database"></i> Datos</a>
+</nav>
+
+<div id="app" class="relative">
+  <!-- MAPA -->
+  <div id="map" class="z-0" aria-label="Mapa"></div>
+
+  <!-- CINTA EJECUTIVA SUPERIOR -->
+  <div class="absolute top-1 left-1/2 -translate-x-1/2 z-[75] 
+              bg-white/90 border border-[var(--b)] rounded-full 
+              px-4 py-1.5 flex flex-wrap items-center gap-3 text-[11px] 
+              shadow-soft max-w-[90vw]">
+    <span class="font-semibold text-emerald-900">
+      Proyecto piloto – Corredor Biocultural Valles Centrales, Oaxaca
+    </span>
+    <span class="hidden sm:inline w-px h-4 bg-[var(--b)]"></span>
+    <span class="hidden sm:inline text-gray-600">
+      Base para decisiones de inversión 2025–2027
+    </span>
+  </div>
+
+  <!-- HERO / Pitch para decisión -->
+  <div class="absolute left-3 top-14 z-50 max-w-[560px]">
+    <div class="panel-glass rounded-2xl shadow-soft p-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl grid place-items-center bg-emerald-50/20 border border-emerald-200/30 text-emerald-200">
+          <i class="fa-solid fa-compass-drafting"></i>
+        </div>
+        <div>
+          <div class="font-extrabold leading-tight text-white text-[15px] md:text-[17px]">
+            Zonas prioritarias de <span class="text-brand">ecoturismo</span> en Valles Centrales
+          </div>
+          <div class="text-sm text-muted mt-1">
+            Vista ejecutiva para identificar <b>3–5 polígonos prioritarios</b> 
+            donde el Estado puede invertir en infraestructura y acompañamiento comunitario 
+            con <b>menor riesgo</b> y <b>mayor potencial turístico</b>.
+          </div>
+        </div>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2 text-[11px]">
+        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-emerald-200/40 bg-emerald-900/20 text-emerald-100">
+          <i class="fa-solid fa-tree"></i> Selección de sitios
+        </span>
+        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-emerald-200/40 bg-emerald-900/20 text-emerald-100">
+          <i class="fa-solid fa-fire"></i> Riesgo / prevención
+        </span>
+        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full border border-emerald-200/40 bg-emerald-900/20 text-emerald-100">
+          <i class="fa-solid fa-truck-plane"></i> Logística básica
+        </span>
+      </div>
+      <div class="mt-2 text-[10px] text-emerald-100/90">
+        Demo con datos sintéticos, lista para conectar a capas oficiales (Atlas de Riesgos, POIs, infraestructura estatal).
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL DERECHO (compacto) -->
+  <aside class="absolute right-3 top-16 z-50 w-[380px] max-w-[92vw] rounded-2xl shadow-deep p-3 space-y-3 panel-glass-dark text-[13px]">
+    <header class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-xl grid place-items-center bg-emerald-50/15 border border-emerald-200/30 text-emerald-200">
+          <i class="fa-solid fa-mountain-sun"></i>
+        </div>
+        <div class="font-bold leading-tight text-white text-[14px]">
+          Plan de <span class="text-brand">Ecoturismo</span>
+          <div class="text-[11px] text-emerald-100/80 font-normal">
+            Vista ejecutiva para decisiones rápidas.
+          </div>
+        </div>
+      </div>
+      <button id="btnModal" class="text-[11px] px-2.5 py-1.5 rounded-xl btn-ghost">
+        ¿Cómo funciona?
+      </button>
+    </header>
+
+    <!-- 1) Prioridades + Escenarios -->
+    <section class="rounded-xl section-dark p-3">
+      <div class="flex items-center justify-between">
+        <div class="font-semibold text-white text-[13px]">
+          1) Dime qué te importa más
+        </div>
+        <label class="flex items-center gap-2 text-[11px] text-emerald-100">
+          <span>Modo optimista</span>
+          <input id="optSwitch" type="checkbox" class="accent-emerald-400" checked>
+        </label>
+      </div>
+
+      <div class="flex items-center gap-2 mt-2">
+        <span class="label-xs">Escenarios rápidos</span>
+        <div class="flex flex-wrap gap-1">
+          <button class="chip-sm" data-scenario="base">Escenario base</button>
+          <button class="chip-sm" data-scenario="optimista" data-on="1">Oportunidades</button>
+          <button class="chip-sm" data-scenario="riesgo">Riesgo alto</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-3 text-white">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2"><span class="text-base">🌄</span><b>Bonitos</b></div>
+          <div class="flex gap-1" data-lvl="nice">
+            <button class="lvl-sm" data-v="0">Nada</button>
+            <button class="lvl-sm" data-v="1">Poco</button>
+            <button class="lvl-sm" data-v="2" data-active="1">Normal</button>
+            <button class="lvl-sm" data-v="3">Mucho</button>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center gap-2"><span class="text-base">🛖</span><b>Servicios</b></div>
+          <div class="flex gap-1" data-lvl="svc">
+            <button class="lvl-sm" data-v="0">Nada</button>
+            <button class="lvl-sm" data-v="1">Poco</button>
+            <button class="lvl-sm" data-v="2">Normal</button>
+            <button class="lvl-sm" data-v="3" data-active="1">Mucho</button>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center gap-2"><span class="text-base">🛣️</span><b>Accesos</b></div>
+          <div class="flex gap-1" data-lvl="acc">
+            <button class="lvl-sm" data-v="0">Nada</button>
+            <button class="lvl-sm" data-v="1">Poco</button>
+            <button class="lvl-sm" data-v="2" data-active="1">Normal</button>
+            <button class="lvl-sm" data-v="3">Mucho</button>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center gap-2"><span class="text-base">⚠️</span><b>Evitar riesgo</b></div>
+          <div class="flex gap-1" data-lvl="risk">
+            <button class="lvl-sm" data-v="0">Nada</button>
+            <button class="lvl-sm" data-v="1">Poco</button>
+            <button class="lvl-sm" data-v="2" data-active="1">Normal</button>
+            <button class="lvl-sm" data-v="3">Mucho</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="priorSum" class="mt-2 label-xs">
+        Tus prioridades: Bonitos: Normal · Servicios: Mucho · Accesos: Normal · Riesgo: Normal
+      </div>
+    </section>
+
+    <!-- 2) ¿Qué te gustaría encontrar? -->
+    <section class="rounded-xl section-dark p-3">
+      <div class="font-semibold mb-2 text-white text-[13px]">2) Activa lo que buscas</div>
+
+      <div class="label-xs mb-1">Lugares bonitos</div>
+      <div class="flex flex-wrap gap-1.5 mb-2" id="chips-nice">
+        <button class="chip-sm" data-group="nice" data-key="cascada">Cascada</button>
+        <button class="chip-sm" data-group="nice" data-key="mirador">Mirador</button>
+        <button class="chip-sm" data-group="nice" data-key="bosque">Áreas verdes</button>
+      </div>
+
+      <div class="label-xs mb-1">Servicios</div>
+      <div class="flex flex-wrap gap-1.5 mb-2" id="chips-svc">
+        <button class="chip-sm" data-group="svc" data-key="agua">Agua</button>
+        <button class="chip-sm" data-group="svc" data-key="luz">Luz</button>
+        <button class="chip-sm" data-group="svc" data-key="hospedaje">Hospedaje</button>
+      </div>
+
+      <div class="label-xs mb-1">Accesos</div>
+      <div class="flex flex-wrap gap-1.5 mb-2" id="chips-acc">
+        <button class="chip-sm" data-group="acc" data-key="camino">Camino</button>
+        <button class="chip-sm" data-group="acc" data-key="vereda">Vereda</button>
+      </div>
+
+      <div class="label-xs mb-1">Riesgos a evitar (simulado)</div>
+      <div class="flex flex-wrap gap-1.5" id="chips-risk">
+        <button class="chip-sm" data-group="risk" data-key="basura">Basura</button>
+        <button class="chip-sm" data-group="risk" data-key="incendio">Incendio</button>
+        <button class="chip-sm" data-group="risk" data-key="barranca">Barranca</button>
+      </div>
+    </section>
+
+    <!-- 3) Detalles de cálculo -->
+    <section class="rounded-xl section-dark p-3">
+      <div class="grid items-center grid-cols-[auto_1fr_auto_auto] gap-3 text-white">
+        <span class="text-[13px]">Tamaño de cuadrito</span>
+        <input id="cellKm" type="range" min="1" max="5" step="0.5" value="2" class="w-full accent-emerald-400">
+        <span id="cellKmVal" class="tabular-nums w-7 text-right text-[12px]">2</span>
+        <span class="text-[12px]">km</span>
+      </div>
+      <div class="mt-2 grid items-center grid-cols-[auto_1fr_auto] gap-3 text-white">
+        <span class="text-[13px]">Meta mínima</span>
+        <input id="thr" type="range" min="40" max="90" step="5" value="60" class="w-full accent-emerald-400">
+        <span id="thrVal" class="tabular-nums w-8 text-right text-[12px]">60</span>
+      </div>
+      <div class="flex gap-2 pt-3">
+        <button id="btnRandom" class="flex-1 h-9 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow text-[12px]">
+          Re-sembrar puntos
+        </button>
+        <button id="btnRun" class="flex-1 h-9 rounded-xl btn-ghost hover:bg-white/16 font-semibold text-[12px]">
+          Actualizar
+        </button>
+      </div>
+    </section>
+
+    <!-- Panel del clic -->
+    <section id="panelInfo" class="hidden rounded-xl section-dark p-3 text-white">
+      <div class="flex items-center justify-between text-[13px]">
+        <div class="font-semibold">Puntaje del sitio</div>
+        <div id="scoreTag" class="px-2 py-1 rounded-lg border border-emerald-200/40 bg-emerald-900/20 text-[11px]">—</div>
+      </div>
+      <div class="bar h-2 w-full border border-emerald-200/40 bg-emerald-900/20 rounded mt-2 overflow-hidden">
+        <span id="scoreBar" style="width:0%"></span>
+      </div>
+      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
+        <div>Bonitos: <b id="kvNice">— m</b> · <b id="ctNice">—</b></div>
+        <div>Servicios: <b id="kvSvc">— m</b> · <b id="ctSvc">—</b></div>
+        <div>Accesos: <b id="kvAcc">— m</b> · <b id="ctAcc">—</b></div>
+        <div>Riesgo (menor=mejor): <b id="kvRisk">—</b> · <b id="ctRisk">—</b></div>
+      </dl>
+      <div class="mt-2 text-[13px] flex items-center justify-between">
+        <span>Resultado</span>
+        <span id="res" class="px-2.5 py-1 rounded-full border border-emerald-200/40 bg-emerald-900/20 text-[11px]">
+          —
+        </span>
+      </div>
+      <div id="resWhy" class="mt-1 text-[11px] text-emerald-100"></div>
+    </section>
+
+    <!-- TOP 3 ZONAS -->
+    <section class="rounded-xl section-dark p-3 text-[12px] text-white">
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-semibold text-[13px]">3 zonas mejor evaluadas</span>
+        <span class="text-[10px] text-emerald-100/80">Demo con datos sintéticos</span>
+      </div>
+      <ol id="topSites" class="space-y-1.5 text-[11px]">
+        <li class="text-emerald-100/70">Ajusta las prioridades y pulsa “Actualizar”.</li>
+      </ol>
+    </section>
+
+    <!-- Cálculo (opcional) -->
+    <section class="rounded-xl section-dark p-3 text-[12px] text-white">
+      <details>
+        <summary class="cursor-pointer select-none font-semibold">
+          Ver cálculo y pesos técnicos
+        </summary>
+        <div class="mt-2 space-y-2">
+          <p class="text-emerald-50/90">
+            El modelo combina distancia a atractivos, servicios, accesos y riesgo en una función
+            de idoneidad normalizada (0–100). Los pesos se ajustan con las prioridades del panel.
+          </p>
+          <p id="eqSubs" class="inline-block px-2 py-1 rounded-md border border-emerald-200/50 bg-emerald-900/40 font-mono text-[11px]">
+            <!-- MathJax se rellena desde JS -->
+          </p>
+          <p class="text-emerald-100/80 text-[11px]">
+            Esta expresión se actualiza en tiempo real cuando cambian prioridades o el modo optimista.
+          </p>
+        </div>
+      </details>
+    </section>
+
+    <div class="mt-1 text-[10px] text-emerald-100/80">
+      Esta vista responde: <b>¿dónde abrir nuevas rutas de ecoturismo con menor riesgo?</b>
+    </div>
+  </aside>
+
+  <!-- Estado -->
+  <div id="status" class="absolute left-3 right-3 bottom-3 z-50 text-xs px-2.5 py-1.5 rounded-lg border border-emerald-200/40 bg-emerald-900/20 text-emerald-50 backdrop-blur shadow">
+    Lat: —, Lng: —
+  </div>
+</div>
+
+<!-- Leyenda compacta -->
+<div class="fixed left-3 bottom-3 z-[60] min-w-[260px] max-w-[86vw] rounded-xl border border-emerald-200/40 bg-emerald-900/30 backdrop-blur shadow p-3 text-xs text-emerald-50">
+  <div class="font-semibold">Colores del mapa</div>
+  <div class="mt-2 grid grid-cols-1 gap-1">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-3.5 h-3.5 rounded border border-emerald-200/40" style="background:#22c55e"></span>
+      Alta (≥65)
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-3.5 h-3.5 rounded border border-emerald-200/40" style="background:#facc15"></span>
+      Media (45–64)
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-3.5 h-3.5 rounded border border-emerald-200/40" style="background:#f87171"></span>
+      Baja (&lt;45)
+    </div>
+  </div>
+  <hr class="my-2 border-emerald-200/30">
+  <div class="space-y-1">
+    <div class="flex items-center justify-between"><span>Cuadrito</span><span><b id="lg-cell">—</b> km</span></div>
+    <div class="flex items-center justify-between"><span>Meta mínima</span><span><b id="lg-thr">—</b></span></div>
+    <div class="grid grid-cols-2 gap-x-3 gap-y-1 mt-1">
+      <div class="flex items-center justify-between"><span>Prior. Bonitos</span><b id="lg-wNice">—</b></div>
+      <div class="flex items-center justify-between"><span>Prior. Servicios</span><b id="lg-wSvc">—</b></div>
+      <div class="flex items-center justify-between"><span>Prior. Accesos</span><b id="lg-wAcc">—</b></div>
+      <div class="flex items-center justify-between"><span>Prior. Evitar Riesgo</span><b id="lg-wRisk">—</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal “Cómo funciona” -->
+<div id="modalBackdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden z-[80]"></div>
+<div id="modal" class="fixed inset-0 hidden z-[81] items-center justify-center">
+  <div class="w-[92vw] max-w-3xl max-h-[86vh] overflow-auto bg-white border border-[var(--b)] rounded-2xl shadow-deep">
+    <div class="sticky top-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--b)] bg-emerald-50 text-emerald-900">
+      <div class="flex items-center gap-2">
+        <i class="fa-regular fa-circle-question"></i>
+        <strong>Cómo usar esta herramienta</strong>
+      </div>
+      <button id="modalClose" class="text-xs px-3 py-1.5 rounded-xl border border-[var(--b)] bg-white hover:bg-emerald-50">
+        Cerrar
+      </button>
+    </div>
+    <div class="p-4 text-[15px] leading-relaxed">
+      <p>
+        Diseñada para <b>tomadores de decisión</b>. Permite visualizar
+        <b>zonas con mayor factibilidad</b> para abrir nuevos servicios de ecoturismo
+        y anticipar <b>riesgos simulados</b> como focos de incendio.
+      </p>
+      <ol class="list-decimal ml-5 space-y-2 mt-2">
+        <li><b>Ajusta prioridades</b> (Bonitos, Servicios, Accesos y Evitar riesgo) o activa el <b>Modo optimista</b> para resaltar oportunidades.</li>
+        <li><b>Activa lo que buscas</b> (cascada, agua, camino, etc.).</li>
+        <li>Haz <b>clic en el mapa</b> para ver explicación del sitio y si resulta <b>APTO</b>.</li>
+        <li>La capa de riesgo (simulada) ayuda a orientar <b>prevención y brigadas</b>.</li>
+      </ol>
+      <p class="mt-3 text-emerald-900/90">
+        Nota: Es una <b>demo con datos sintéticos</b> para mostrar el flujo de decisión; al conectar datos reales
+        (POIs, servicios, infraestructura y modelos de riesgo) se convierte en una herramienta operativa.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Municipios (pines) ===== -->
+<script>
+const placesWithCoordinates = [
+  { name:"San Pablo Huitzo, Oaxaca, Mexico", latitude:17.2667, longitude:-96.8833 },
+  { name:"San Francisco Telixtlahuaca, Oaxaca, Mexico", latitude:17.3167, longitude:-96.9000 },
+  { name:"Santiago Suchilquitongo, Oaxaca, Mexico", latitude:17.2333, longitude:-96.8667 },
+  { name:"San Pablo Villa de Mitla, Oaxaca, Mexico", latitude:16.9261, longitude:-96.3597 },
+  { name:"La Unión Zapata, Oaxaca, Mexico", latitude:17.1000, longitude:-96.8000 },
+  { name:"Villa Díaz Ordaz, Oaxaca, Mexico", latitude:17.2000, longitude:-96.7500 },
+  { name:"San Juan Bautista Guelache, Oaxaca, Mexico", latitude:17.1833, longitude:-96.8167 },
+  { name:"San Miguel Etla, Oaxaca, Mexico", latitude:17.2000, longitude:-96.8000 },
+  { name:"Tlalixtac de Cabrera, Oaxaca, Mexico", latitude:17.1167, longitude:-96.6833 },
+  { name:"San Antonio de la Cal, Oaxaca, Mexico", latitude:17.0833, longitude:-96.7167 },
+  { name:"San Agustín de las Juntas, Oaxaca, Mexico", latitude:17.0667, longitude:-96.7333 },
+  { name:"San Marcos Tlapazola, Oaxaca, Mexico", latitude:16.9500, longitude:-96.7000 },
+  { name:"San Bartolomé Quialana, Oaxaca, Mexico", latitude:16.8833, longitude:-96.6167 },
+  { name:"San Gabriel Etla, Oaxaca, Mexico", latitude:17.2136, longitude:-96.7692 }
+];
+</script>
+
+<script>
+/* ===== helpers ===== */
+const $ = id => document.getElementById(id);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const fmtM = v => Intl.NumberFormat('es-MX').format(Math.round(v)) + ' m';
+const pct = x => (Math.round(x * 1000) / 10) + '%';
+const MAX_M = 4000;
+
+/* helper para aproximar municipio cercano al centro del hex */
+function nearestTownName(lat, lng){
+  let best = null, min = Infinity;
+  for(const p of placesWithCoordinates){
+    const dLat = lat - p.latitude;
+    const dLng = lng - p.longitude;
+    const d = dLat*dLat + dLng*dLng;
+    if(d < min){
+      min = d;
+      best = p;
+    }
+  }
+  return best ? best.name.split(',')[0] : 'Zona';
+}
+
+/* ===== mapa (satélite por defecto) ===== */
+const map = L.map('map', {
+  center: [17.08, -96.72],
+  zoom: 11,
+  preferCanvas: true
+});
+
+// Satélite ESRI
+const sat = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom: 19, attribution: 'Tiles © Esri/Maxar' }
+).addTo(map);
+
+// OSM alterno
+const osm = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { maxZoom: 19, attribution: '© OpenStreetMap' }
+);
+
+L.control.layers(
+  { "Satélite": sat, "Mapa base": osm },
+  {},
+  { position: 'topleft' }
+).addTo(map);
+
+L.control.scale({imperial:false}).addTo(map);
+
+// Pane para animar hexágonos
+map.createPane('hex');
+map.getPane('hex').classList.add('hex-pane');
+
+// Municipios: pines + etiquetas con halo
+const placesLayer = L.layerGroup().addTo(map);
+placesWithCoordinates.forEach(p => {
+  const ll = [p.latitude, p.longitude];
+  const pin = L.divIcon({
+    className: '',
+    iconSize: [28, 38],
+    iconAnchor: [14, 38],
+    html: `
+      <div style="transform:translate(-50%,-100%);filter:drop-shadow(0 3px 8px rgba(0,0,0,.35))">
+        <svg viewBox="0 0 28 38" width="28" height="38">
+          <path d="M14 2c-6.1 0-11 4.64-11 10.36 0 7.24 9.5 18.56 10.08 19.28a1.2 1.2 0 0 0 1.84 0C15.5 30.92 25 19.6 25 12.36 25 6.64 20.1 2 14 2z" fill="#fff"/>
+          <path d="M14 3.4c-5.35 0-9.65 4.07-9.65 9.1 0 6.38 8.35 16.35 8.86 16.98.33.4.95.4 1.28 0 .51-.63 8.86-10.6 8.86-16.98 0-5.03-4.3-9.1-9.65-9.1z" fill="#16a34a" stroke="#0a6b55" stroke-width="1"/>
+          <circle cx="14" cy="12.5" r="3.2" fill="rgba(255,255,255,.95)"/>
+        </svg>
+      </div>`
+  });
+  L.marker(ll, {icon: pin}).addTo(placesLayer).bindPopup(`<b>${p.name}</b>`);
+  // Etiqueta permanente sin caja
+  L.tooltip({permanent:true, direction:'right', offset:[10,-6], className:'place-label'})
+    .setContent(p.name.split(',')[0])
+    .setLatLng(ll)
+    .addTo(placesLayer);
+});
+
+// Ocultar etiquetas si el zoom es muy bajo
+function syncPlaceLabels(){
+  if(map.getZoom() < 11) map.getContainer().classList.add('hide-place-labels');
+  else map.getContainer().classList.remove('hide-place-labels');
+}
+map.on('zoomend', syncPlaceLabels);
+syncPlaceLabels();
+
+// BBOX por municipios
+const xs = placesWithCoordinates.map(p => p.longitude);
+const ys = placesWithCoordinates.map(p => p.latitude);
+const bbox = [
+  Math.min(...xs) - 0.15,
+  Math.min(...ys) - 0.15,
+  Math.max(...xs) + 0.15,
+  Math.max(...ys) + 0.15
+];
+map.fitBounds([[bbox[1], bbox[0]], [bbox[3], bbox[2]]]);
+
+/* ===== datos simulados (subcategorías) ===== */
+const r = (a,b) => a + Math.random() * (b - a);
+const rp = () => [r(bbox[0], bbox[2]), r(bbox[1], bbox[3])];
+
+const src = {
+  nice: { cascada:[], mirador:[], bosque:[] },
+  svc:  { agua:[], luz:[], hospedaje:[] },
+  acc:  { camino:[], vereda:[] },
+  risk: { basura:[], incendio:[], barranca:[] }
+};
+const srcLayer = L.layerGroup().addTo(map);
+
+function reseed(optimista = true){
+  const multPos   = optimista ? 1.35 : 1.0;
+  const multRisk  = optimista ? 0.65 : 1.0;
+  const riskScale = optimista ? 0.55 : 1.0;
+  const mkRisk    = () => ({ risk:(Math.random()*0.8 + 0.2) * riskScale });
+
+  src.nice.cascada  = Array.from({length:Math.round(8  * multPos)}, () => turf.point(rp()));
+  src.nice.mirador  = Array.from({length:Math.round(12 * multPos)}, () => turf.point(rp()));
+  src.nice.bosque   = Array.from({length:Math.round(16 * multPos)}, () => turf.point(rp()));
+
+  src.svc.agua      = Array.from({length:Math.round(14 * multPos)}, () => turf.point(rp()));
+  src.svc.luz       = Array.from({length:Math.round(12 * multPos)}, () => turf.point(rp()));
+  src.svc.hospedaje = Array.from({length:Math.round(10 * multPos)}, () => turf.point(rp()));
+
+  src.acc.camino    = Array.from({length:Math.round(12 * multPos)}, () => turf.point(rp()));
+  src.acc.vereda    = Array.from({length:Math.round(14 * multPos)}, () => turf.point(rp()));
+
+  src.risk.basura   = Array.from({length:Math.round(8 * multRisk)},  () => turf.point(rp(), mkRisk()));
+  src.risk.incendio = Array.from({length:Math.round(6 * multRisk)},  () => turf.point(rp(), mkRisk()));
+  src.risk.barranca = Array.from({length:Math.round(6 * multRisk)},  () => turf.point(rp(), mkRisk()));
+
+  srcLayer.clearLayers();
+  const draw = (fc, color, label) => L.geoJSON(turf.featureCollection(fc), {
+    pointToLayer:(f,ll) => L.circleMarker(ll, {radius:5, color, fillColor:color, fillOpacity:.95})
+  }).addTo(srcLayer).bindTooltip(label);
+
+  draw(src.nice.cascada,  '#22c55e','Cascada');
+  draw(src.nice.mirador,  '#22c55e','Mirador');
+  draw(src.nice.bosque,   '#22c55e','Áreas verdes');
+
+  draw(src.svc.agua,      '#38bdf8','Agua');
+  draw(src.svc.luz,       '#38bdf8','Luz');
+  draw(src.svc.hospedaje, '#38bdf8','Hospedaje');
+
+  draw(src.acc.camino,    '#94a3b8','Camino');
+  draw(src.acc.vereda,    '#94a3b8','Vereda');
+
+  draw(src.risk.basura,   '#f87171','Basura');
+  draw(src.risk.incendio, '#f87171','Incendio');
+  draw(src.risk.barranca, '#f87171','Barranca');
+}
+
+/* ===== estado UI ===== */
+const chosen = {
+  nice: new Set(['cascada','mirador','bosque']),
+  svc:  new Set(['agua','luz','hospedaje']),
+  acc:  new Set(['camino','vereda']),
+  risk: new Set(['basura','incendio','barranca'])
+};
+const levels = { nice:3, svc:3, acc:2, risk:2 };
+const levelToWeight = [0,0.20,0.33,0.60]; // Nada, Poco, Normal, Mucho
+
+/* ===== modelo ===== */
+const hexLayerGroup = L.layerGroup().addTo(map);
+hexLayerGroup.options = { pane:'hex' };
+let gridFC = null;
+
+const combineSelected = g => turf.featureCollection(
+  [...chosen[g]].flatMap(k => src[g][k] || [])
+);
+
+const nearestOrMax = (p,fc) =>
+  fc.features.length
+    ? turf.distance(p, turf.nearestPoint(p, fc), {units:'meters'})
+    : MAX_M;
+
+function runModel(){
+  hexLayerGroup.clearLayers();
+  const cell = parseFloat($('cellKm').value);
+  const optimista = $('optSwitch').checked;
+
+  // prioridades → pesos normalizados
+  const wRaw = {
+    nice: levelToWeight[levels.nice],
+    svc:  levelToWeight[levels.svc],
+    acc:  levelToWeight[levels.acc],
+    risk: levelToWeight[levels.risk]
+  };
+  const sumW = Math.max(1e-9, wRaw.nice + wRaw.svc + wRaw.acc + wRaw.risk);
+  const w = {
+    nice: wRaw.nice / sumW,
+    svc:  wRaw.svc  / sumW,
+    acc:  wRaw.acc  / sumW,
+    risk: wRaw.risk / sumW
+  };
+
+  // parámetros amables (más verde)
+  const BIAS_GOOD  = optimista ? 0.68 : 1.0; // <1 → potencia beneficios (raíz)
+  const RISK_ALPHA = optimista ? 0.55 : 1.0; // reduce penalización por riesgo
+  const GREEN = 65, YELLOW = 45;             // cortes de color
+
+  // leyenda en vivo
+  $('lg-cell').textContent = $('cellKm').value;
+  $('lg-thr').textContent  = $('thr').value;
+  $('lg-wNice').textContent = w.nice.toFixed(2);
+  $('lg-wSvc').textContent  = w.svc.toFixed(2);
+  $('lg-wAcc').textContent  = w.acc.toFixed(2);
+  $('lg-wRisk').textContent = w.risk.toFixed(2);
+
+  const fcNice = combineSelected('nice');
+  const fcSvc  = combineSelected('svc');
+  const fcAcc  = combineSelected('acc');
+  const fcHaz  = combineSelected('risk');
+
+  const toBenefit = d => Math.pow(clamp01(1 - Math.min(d, MAX_M) / MAX_M), BIAS_GOOD);
+  const toPenalty = d => clamp01(Math.min(d, MAX_M) / MAX_M);
+
+  const hex = turf.hexGrid(bbox, cell, {units:'kilometers'});
+  hex.features = hex.features.map(c => {
+    const p = turf.centerOfMass(c);
+
+    const dNice = nearestOrMax(p, fcNice);
+    const dSvc  = nearestOrMax(p, fcSvc);
+    const dAcc  = nearestOrMax(p, fcAcc);
+
+    // riesgo
+    let h = 0.4, dHaz = MAX_M;
+    if(fcHaz.features.length){
+      const n = turf.nearestPoint(p, fcHaz);
+      h    = n.properties.risk ?? 0.4;
+      dHaz = turf.distance(p, n, {units:'meters'});
+    }
+
+    const vNice = toBenefit(dNice);
+    const vSvc  = toBenefit(dSvc);
+    const vAcc  = toBenefit(dAcc);
+    const vRisk = 1 - clamp01(RISK_ALPHA * h * (1 - toPenalty(dHaz)));
+
+    const score01 = vNice*w.nice + vSvc*w.svc + vAcc*w.acc + vRisk*w.risk;
+
+    c.properties = {
+      score: Math.round(score01 * 100),
+      raw: {
+        dNice: Math.round(dNice),
+        dSvc:  Math.round(dSvc),
+        dAcc:  Math.round(dAcc),
+        dHaz:  Math.round(dHaz),
+        h:     +h.toFixed(2)
+      },
+      contr: {
+        nice: vNice*w.nice,
+        svc:  vSvc*w.svc,
+        acc:  vAcc*w.acc,
+        risk: vRisk*w.risk,
+        total: score01
+      },
+      cls: (score01*100 >= GREEN) ? 'g' : (score01*100 >= YELLOW ? 'y' : 'r')
+    };
+    return c;
+  });
+
+  gridFC = hex;
+  const thr = +$('thr').value;
+
+  L.geoJSON(hex, {
+    pane:'hex',
+    style: f => ({
+      color:'rgba(0,0,0,.22)',
+      weight:1,
+      fillOpacity:.55,
+      fillColor: f.properties.cls === 'g'
+        ? '#22c55e'
+        : (f.properties.cls === 'y' ? '#facc15' : '#f87171')
+    }),
+    onEachFeature:(f,l) => l.bindTooltip(`Puntaje: <b>${f.properties.score}</b>`, {sticky:true})
+  }).addTo(hexLayerGroup);
+
+  const aptas = {
+    type:'FeatureCollection',
+    features: hex.features.filter(f => f.properties.score >= thr)
+  };
+  L.geoJSON(aptas, {
+    pane:'hex',
+    style: () => ({color:'#bbf7d0',weight:2,fillOpacity:0})
+  }).addTo(hexLayerGroup);
+
+  const eq = $('eqSubs');
+  if(eq){
+    eq.innerHTML =
+      `$\\alpha=${RISK_ALPHA.toFixed(2)},\\;w_b=${w.nice.toFixed(2)},` +
+      `\\;w_s=${w.svc.toFixed(2)},\\;w_a=${w.acc.toFixed(2)},\\;w_r=${w.risk.toFixed(2)}$`;
+    if(window.MathJax) MathJax.typesetPromise();
+  }
+
+  // TOP-3 ZONAS MEJOR EVALUADAS
+  const topList = $('topSites');
+  if(topList){
+    const sorted = [...hex.features]
+      .filter(f => Number.isFinite(f.properties.score))
+      .sort((a,b) => b.properties.score - a.properties.score)
+      .slice(0,3);
+
+    topList.innerHTML = '';
+    if(!sorted.length){
+      const li = document.createElement('li');
+      li.className = 'text-emerald-100/70';
+      li.textContent = 'Sin celdas evaluadas en este escenario.';
+      topList.appendChild(li);
+    }else{
+      sorted.forEach((f,idx) => {
+        const center = turf.centerOfMass(f).geometry.coordinates;
+        const town = nearestTownName(center[1], center[0]);
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between gap-2';
+        li.innerHTML = `
+          <span>#${idx+1} ${town}</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-900/30 border border-emerald-200/40">
+            ${f.properties.score} / 100
+          </span>`;
+        topList.appendChild(li);
+      });
+    }
+  }
+}
+
+/* ===== interacción ===== */
+map.on('mousemove', e => {
+  $('status').textContent =
+    `Lat: ${e.latlng.lat.toFixed(5)}, Lng: ${e.latlng.lng.toFixed(5)}`;
+});
+
+map.on('click', e => {
+  if(!gridFC) return;
+  const p = turf.point([e.latlng.lng, e.latlng.lat]);
+  let best = null, min = Infinity;
+
+  hexLayerGroup.eachLayer(l => {
+    if(!l.feature) return;
+    const c = turf.centerOfMass(l.feature).geometry.coordinates;
+    const d = turf.distance(p, turf.point(c), {units:'meters'});
+    if(d < min){ min = d; best = l.feature; }
+  });
+
+  if(!best) return;
+
+  const r = best.properties.raw;
+  const c = best.properties.contr;
+  const s = best.properties.score;
+
+  $('panelInfo').classList.remove('hidden');
+  $('scoreTag').textContent = s + '/100';
+  $('scoreBar').style.width = Math.max(0, Math.min(100, s)) + '%';
+
+  $('kvNice').textContent = fmtM(r.dNice);
+  $('ctNice').textContent = pct(c.nice);
+  $('kvSvc').textContent  = fmtM(r.dSvc);
+  $('ctSvc').textContent  = pct(c.svc);
+  $('kvAcc').textContent  = fmtM(r.dAcc);
+  $('ctAcc').textContent  = pct(c.acc);
+  $('kvRisk').textContent = (1 - r.h).toFixed(2) + ' (1−h)';
+  $('ctRisk').textContent = pct(c.risk);
+
+  const optimista = $('optSwitch').checked;
+  const thr = +$('thr').value;
+
+  const accesoOK   = r.dAcc <= (optimista ? 1600 : 1200);
+  const servicioOK = r.dSvc <= (optimista ? 1800 : 1500);
+  const riesgoOK   = (1 - r.h) >= (optimista ? 0.30 : 0.40);
+  const apto = (s >= thr) && accesoOK && servicioOK && riesgoOK;
+
+  const res = $('res');
+  res.className =
+    'px-2.5 py-1 rounded-full border text-xs ' +
+    (apto
+      ? 'border-emerald-200/60 bg-emerald-900/20 text-emerald-50'
+      : 'border-yellow-200/60 bg-yellow-900/10 text-yellow-100');
+  res.textContent = apto
+    ? 'RECOMENDADO para desarrollo (simulado)'
+    : 'Requiere mayor inversión o mitigación (simulado)';
+
+  const faltan = [];
+  if(!accesoOK)   faltan.push('Acceso');
+  if(!servicioOK) faltan.push('Servicios');
+  if(!riesgoOK)   faltan.push('Riesgo');
+
+  $('resWhy').textContent =
+    faltan.length
+      ? 'Condiciones a fortalecer: ' + faltan.join(', ')
+      : 'Puede pasar a cartera de proyectos para evaluación detallada.';
+});
+
+/* ===== UI ===== */
+function refreshPriorSummary(){
+  const txt = ['Nada','Poco','Normal','Mucho'];
+  $('priorSum').textContent =
+    `Tus prioridades: Bonitos: ${txt[levels.nice]} · ` +
+    `Servicios: ${txt[levels.svc]} · Accesos: ${txt[levels.acc]} · ` +
+    `Riesgo: ${txt[levels.risk]}`;
+}
+
+// niveles (usa data-lvl y data-v, no depende de la clase)
+document.querySelectorAll('[data-lvl]').forEach(group => {
+  group.addEventListener('click', ev => {
+    const btn = ev.target.closest('[data-v]');
+    if(!btn) return;
+    group.querySelectorAll('[data-v]').forEach(b => b.removeAttribute('data-active'));
+    btn.setAttribute('data-active','1');
+    const key = group.getAttribute('data-lvl');
+    levels[key] = +btn.dataset.v;
+    refreshPriorSummary();
+    runModel();
+  });
+});
+
+function toggleChip(el){
+  const g = el.dataset.group;
+  const k = el.dataset.key;
+  if(el.getAttribute('data-on') === '1'){
+    el.setAttribute('data-on','0');
+    chosen[g].delete(k);
+  }else{
+    el.setAttribute('data-on','1');
+    chosen[g].add(k);
+  }
+}
+
+// chips (usa data-group, no depende de la clase)
+document.querySelectorAll('[data-group]').forEach(ch => {
+  ch.addEventListener('click', () => { toggleChip(ch); runModel(); });
+  ch.setAttribute('data-on','1'); // activas por defecto
+});
+
+function syncSliders(){
+  $('cellKmVal').textContent = $('cellKm').value;
+  $('thrVal').textContent    = $('thr').value;
+}
+['cellKm','thr','optSwitch'].forEach(id => {
+  $(id).addEventListener('input', () => {
+    syncSliders();
+    reseed($('optSwitch').checked);
+    runModel();
+  });
+});
+$('btnRun').addEventListener('click', runModel);
+$('btnRandom').addEventListener('click', () => {
+  reseed($('optSwitch').checked);
+  runModel();
+});
+
+// Escenarios rápidos
+const scenarioButtons = document.querySelectorAll('[data-scenario]');
+scenarioButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    scenarioButtons.forEach(b => b.removeAttribute('data-on'));
+    btn.setAttribute('data-on','1');
+    const s = btn.dataset.scenario;
+
+    if(s === 'base'){
+      $('optSwitch').checked = false;
+      levels.nice = 2;
+      levels.svc  = 2;
+      levels.acc  = 2;
+      levels.risk = 2;
+    }else if(s === 'optimista'){
+      $('optSwitch').checked = true;
+      levels.nice = 3;
+      levels.svc  = 3;
+      levels.acc  = 2;
+      levels.risk = 2;
+    }else if(s === 'riesgo'){
+      $('optSwitch').checked = false;
+      levels.nice = 1;
+      levels.svc  = 2;
+      levels.acc  = 2;
+      levels.risk = 3;
+    }
+
+    // actualizar botones de nivel visualmente
+    document.querySelectorAll('[data-lvl]').forEach(group => {
+      const key = group.getAttribute('data-lvl');
+      const val = levels[key];
+      group.querySelectorAll('[data-v]').forEach(b => {
+        if(+b.dataset.v === val) b.setAttribute('data-active','1');
+        else b.removeAttribute('data-active');
+      });
+    });
+
+    syncSliders();
+    refreshPriorSummary();
+    reseed($('optSwitch').checked);
+    runModel();
+  });
+});
+
+const openModal = () => {
+  $('modal').classList.remove('hidden');
+  $('modal').classList.add('flex');
+  $('modalBackdrop').classList.remove('hidden');
+  if(window.MathJax) MathJax.typesetPromise();
+};
+const closeModal = () => {
+  $('modal').classList.add('hidden');
+  $('modal').classList.remove('flex');
+  $('modalBackdrop').classList.add('hidden');
+};
+$('btnModal').addEventListener('click', openModal);
+$('modalClose').addEventListener('click', closeModal);
+$('modalBackdrop').addEventListener('click', closeModal);
+
+/* ===== init ===== */
+reseed(true);
+syncSliders();
+refreshPriorSummary();
+runModel();
+</script>
+</body>
+</html>

@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geoportal Biocultural de Oaxaca</title>
+
+<!-- Tailwind (solo para modal/card) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bosque: { 50:'#ecfdf5', 100:'#d1fae5', 300:'#86efac', 500:'#16a34a', 600:'#0e7a3a', 800:'#065f46' },
+          marco:{ 300:'rgba(147,243,192,.25)' }
+        },
+        boxShadow: {
+          fino: '0 8px 24px rgba(6,95,70,.18)',
+          verde: '0 16px 40px rgba(6,95,70,.35)'
+        }
+      }
+    }
+  }
+</script>
+
+<!-- Leaflet + utilidades -->
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://unpkg.com/leaflet-hash"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+<!-- Iconos / tipografía -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --primary:#22c55e;
+    --primary-2:#166534;
+    --accent:#facc15;
+    --bg:#020617;
+    --panel:rgba(15,23,42,.96);
+    --line:rgba(148,163,184,.45);
+    --text:#e5fbe9;
+    --muted:#9ca3af;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, #0f172a, var(--bg)),
+      radial-gradient(800px 800px at -10% 110%, #022c22 0, transparent 55%);
+    color:var(--text);
+    transition:all .25s ease;
+  }
+  #app{
+    min-height:100vh;
+    display:grid;
+    grid-template-areas:"header" "main" "footer";
+    grid-template-rows:64px 1fr 56px;
+  }
+
+  /* HEADER */
+  header{
+    grid-area:header;
+    background:
+      linear-gradient(120deg,rgba(34,197,94,.92),rgba(21,128,61,.98)),
+      radial-gradient(circle at 10% 0,rgba(250,204,21,.35),transparent 55%);
+    color:#022c22;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:0 12px;
+    border-bottom:1px solid rgba(22,163,74,.4);
+    box-shadow:0 14px 30px rgba(15,118,110,.45);
+    transition:opacity .25s,transform .25s;
+  }
+  header .brand{display:flex;align-items:center;gap:10px}
+  header .brand img{
+    height:40px;border-radius:10px;
+    box-shadow:0 4px 16px rgba(0,0,0,.35);
+    background:#022c22;
+  }
+  header .brand .title strong{
+    display:block;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    font-size:15px;
+  }
+  header .brand .title small{
+    font-size:11px;
+    opacity:.9;
+  }
+
+  /* Título animado */
+  .title-animated{
+    position:relative;
+    background:linear-gradient(90deg,#052e16,#14532d,#22c55e,#84cc16,#facc15);
+    background-size:300% 100%;
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    animation:titleGlow 8s linear infinite;
+    text-shadow:0 0 12px rgba(22,163,74,.45);
+  }
+  .partners-line{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-top:2px;
+    font-size:11px;
+    color:#022c22;
+  }
+  .partners-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:2px 7px;
+    border-radius:999px;
+    background:rgba(255,255,255,.6);
+    border:1px solid rgba(22,163,74,.35);
+    font-weight:600;
+  }
+  .partners-pill i{font-size:10px;}
+
+  @keyframes titleGlow{
+    0%{background-position:0% 50%;transform:translateY(0);}
+    50%{background-position:100% 50%;transform:translateY(-0.5px);}
+    100%{background-position:0% 50%;transform:translateY(0);}
+  }
+
+  header .nav{display:flex;gap:8px;flex-wrap:wrap}
+  header .nav a{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 10px;
+    border-radius:999px;
+    background:rgba(255,255,255,.14);
+    color:#022c22;
+    text-decoration:none;
+    border:1px solid rgba(255,255,255,.5);
+    font-size:12px;
+    font-weight:600;
+    transition:.18s transform,.18s box-shadow,.18s background;
+  }
+  header .nav a i{font-size:11px}
+  header .nav a.active,
+  header .nav a:hover{
+    background:#f9fafb;
+    color:#14532d;
+    box-shadow:0 6px 18px rgba(15,118,110,.45);
+  }
+
+  .kpis{display:flex;gap:8px}
+  .kpi{
+    background:linear-gradient(145deg,rgba(15,23,42,.08),rgba(15,23,42,.22));
+    border:1px solid rgba(15,118,110,.5);
+    border-radius:12px;
+    padding:6px 10px;
+    font-size:12px;
+    text-align:center;
+    color:#022c22;
+    backdrop-filter:blur(10px);
+  }
+  .kpi .v{
+    font-weight:800;
+    font-size:18px;
+    line-height:1.1;
+  }
+
+  main{grid-area:main;position:relative}
+  #map{position:absolute;inset:0}
+
+  /* Geocoder centrado */
+  .geocoder-wrap{
+    position:absolute;
+    left:50%;top:12px;
+    transform:translateX(-50%);
+    z-index:540;
+    background:rgba(15,23,42,.95);
+    border-radius:999px;
+    padding:4px 8px;
+    border:1px solid rgba(56,189,248,.45);
+    box-shadow:0 12px 30px rgba(15,23,42,.8);
+    transition:opacity .25s,transform .25s;
+  }
+  .leaflet-control-geocoder{background:transparent;border:none;box-shadow:none}
+  .leaflet-control-geocoder-form input{
+    width:320px;max-width:60vw;
+    background:rgba(15,23,42,.9);
+    color:#e5fbe9;
+    border:1px solid rgba(148,163,184,.8);
+    border-radius:999px;
+    padding:9px 14px;
+    outline:none;
+    font-size:13px;
+  }
+  .leaflet-control-geocoder-form input::placeholder{color:#9ca3af}
+  .leaflet-control-geocoder-form input:focus{
+    box-shadow:0 0 0 2px rgba(56,189,248,.85);
+    border-color:rgba(22,163,74,.9);
+  }
+
+  /* Panel de capas */
+  .panel{
+    position:absolute;
+    right:12px;top:12px;
+    z-index:520;
+    background:var(--panel);
+    border-radius:18px;
+    min-width:320px;
+    max-width:min(420px,92vw);
+    padding:12px 12px 14px 12px;
+    max-height:72vh;
+    overflow:auto;
+    box-shadow:0 22px 60px rgba(15,23,42,.95);
+    border:1px solid rgba(148,163,184,.5);
+    backdrop-filter:blur(16px);
+    transition:opacity .25s,transform .25s;
+    font-size:13px;
+  }
+  .panel h4{
+    margin:0 0 8px 0;
+    font-size:14px;
+    color:#e5fbe9;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .panel h4 i{
+    font-size:12px;
+    color:#22c55e;
+  }
+  .block{margin:10px 0}
+  .block b{
+    display:block;
+    margin-bottom:6px;
+    font-size:12px;
+    color:#a5f3fc;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    opacity:.9;
+  }
+  .item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:4px 0;
+    font-size:13px;
+    color:#e5e7eb;
+  }
+  .item input[type="checkbox"],
+  .item input[type="radio"]{
+    accent-color:#22c55e;
+  }
+  .item span.lbl{flex:1}
+  .sep{
+    height:1px;
+    background:linear-gradient(90deg,transparent,rgba(148,163,184,.7),transparent);
+    margin:10px 0;
+    opacity:.75;
+  }
+
+  .btn{
+    width:100%;
+    height:40px;
+    margin-top:6px;
+    border-radius:999px;
+    border:1px solid rgba(74,222,128,.8);
+    background:radial-gradient(circle at 0 0,#22c55e,#16a34a);
+    color:#ecfdf5;
+    cursor:pointer;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    box-shadow:0 10px 26px rgba(22,163,74,.65);
+    transition:.15s transform,.15s box-shadow,.15s filter;
+  }
+  .btn i{margin-right:4px}
+  .btn:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.05);
+    box-shadow:0 14px 32px rgba(22,163,74,.8);
+  }
+
+  /* Leyenda más grande y responsiva */
+  .legend{
+    position:absolute;
+    left:12px;bottom:12px;
+    z-index:500;
+    padding:14px 16px 15px 16px; /* NUEVO: un poco más de padding */
+    min-width:340px;             /* NUEVO: un poco más ancha */
+    max-width:380px;
+    border-radius:18px;
+    background:
+      radial-gradient(circle at 0 0,rgba(52,211,153,.18),transparent 60%),
+      radial-gradient(circle at 120% 120%,rgba(56,189,248,.16),transparent 60%),
+      rgba(15,23,42,.96);
+    color:#e5fbe9;
+    border:1px solid rgba(45,212,191,.6);
+    box-shadow:0 22px 70px rgba(15,23,42,.95);
+    backdrop-filter:blur(18px);
+    overflow:hidden;
+    transition:opacity .25s,transform .25s;
+    font-size:14px;              /* NUEVO: texto un poco más grande */
+  }
+  .legend::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    border-radius:inherit;
+    background:linear-gradient(135deg,rgba(52,211,153,.95),rgba(250,204,21,.7),rgba(56,189,248,.85));
+    opacity:.65;
+    mix-blend-mode:screen;
+    pointer-events:none;
+    z-index:-1;
+  }
+  .legend-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    margin-bottom:8px;
+  }
+  .legend-title{
+    font-size:16px;              /* NUEVO */
+    font-weight:800;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .legend-title i{
+    font-size:13px;
+    color:#facc15;
+  }
+  .legend-pill{
+    font-size:11px;
+    padding:4px 10px;
+    border-radius:999px;
+    background:rgba(15,23,42,.85);
+    border:1px solid rgba(148,163,184,.7);
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .legend-pill-dot{
+    width:8px;height:8px;
+    border-radius:999px;
+    background:radial-gradient(circle,#22c55e,#16a34a);
+  }
+
+  .legend-toggle{
+    margin-left:auto;
+    width:24px;height:24px;
+    border-radius:999px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    border:1px solid rgba(148,163,184,.8);
+    background:rgba(15,23,42,.88);
+    cursor:pointer;
+    transition:.18s transform,.18s background;
+  }
+  .legend-toggle:hover{
+    background:rgba(15,23,42,1);
+    transform:translateY(-1px);
+  }
+
+  .legend-body{
+    border-radius:12px;
+    background:rgba(15,23,42,.9);
+    padding:8px 9px 8px 9px;
+    font-size:13px;
+    max-height:260px;
+    overflow:auto;
+  }
+  .legend-section{
+    margin-bottom:8px;
+    padding-bottom:6px;
+    border-bottom:1px dashed rgba(55,65,81,.7);
+  }
+  .legend-section:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+  .legend-section-title{
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.16em;
+    margin-bottom:4px;
+    color:#a5f3fc;
+    opacity:.95;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .legend-section-title span.dot{
+    width:7px;height:7px;border-radius:999px;
+  }
+  .legend-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:3px 0;
+  }
+  .legend-row-label{flex:1}
+
+  .legend .sw{
+    display:inline-block;
+    width:16px;height:16px;
+    border:1px solid rgba(15,23,42,.95);
+    border-radius:4px;
+  }
+
+  .legend-footer{
+    margin-top:6px;
+    font-size:11px;
+    opacity:.8;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .legend-footer span.badge{
+    padding:3px 8px;
+    border-radius:999px;
+    border:1px solid rgba(148,163,184,.7);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.12em;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .legend-footer span.badge i{
+    font-size:11px;
+  }
+
+  .legend.collapsed .legend-body,
+  .legend.collapsed .legend-footer{
+    display:none;
+  }
+
+  /* NUEVO: control de coordenadas */
+  .coords{
+    position:absolute;
+    left:50%;
+    bottom:10px;
+    transform:translateX(-50%);
+    z-index:510;
+    padding:4px 10px;
+    border-radius:999px;
+    background:rgba(15,23,42,.88);
+    border:1px solid rgba(148,163,184,.6);
+    font-size:11px;
+    color:#e5fbe9;
+    backdrop-filter:blur(10px);
+    white-space:nowrap;
+  }
+
+  /* NUEVO: flecha de norte simple */
+  .north-arrow{
+    position:absolute;
+    right:12px;
+    bottom:82px;
+    z-index:510;
+    width:34px;
+    height:34px;
+    border-radius:999px;
+    background:rgba(15,23,42,.9);
+    border:1px solid rgba(148,163,184,.6);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    color:#e5fbe9;
+    box-shadow:0 10px 24px rgba(15,23,42,.8);
+  }
+
+  footer{
+    grid-area:footer;
+    background:#020617;
+    border-top:1px solid rgba(15,23,42,.9);
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+    padding:6px 12px 8px 12px;
+    font-size:12px;
+    color:var(--muted);
+    transition:opacity .25s,transform .25s;
+    gap:4px;
+  }
+  footer .foot-main{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  footer img{
+    height:24px;
+    border-radius:6px;
+    box-shadow:0 3px 10px rgba(0,0,0,.5);
+  }
+  footer .foot-partners{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    font-size:11px;
+  }
+  footer .foot-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:2px 6px;
+    border-radius:999px;
+    border:1px solid rgba(55,65,81,.9);
+    background:#020617;
+  }
+  footer .foot-pill i{font-size:10px;}
+  footer a.privacy{
+    color:var(--accent);
+    text-decoration:none;
+    margin-left:auto;
+  }
+  footer a.privacy:hover{text-decoration:underline}
+
+  @media(max-width:900px){
+    header{
+      flex-wrap:wrap;
+      justify-content:center;
+      gap:6px;
+      padding:4px 8px;
+    }
+    header .nav{
+      justify-content:center;
+    }
+    .panel{max-height:58vh;}
+    .leaflet-control-geocoder-form input{width:220px}
+  }
+  @media(max-width:640px){
+    .legend{
+      left:8px;
+      right:8px;
+      bottom:8px;
+      max-width:none;
+      width:auto;
+      min-width:auto;
+    }
+    .legend-body{
+      max-height:40vh;
+    }
+    header .brand .title strong{font-size:13px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <img src="IPN-Logo.png" alt="IPN" />
+      <div class="title">
+<strong style="font-size:1.2rem;font-weight:800;color:#064e3b;">Geoportal biocultural de oaxaca </strong>
+        <small>IPN · CVDR Oaxaca · Corredor Biocultural</small>
+        <div class="partners-line">
+          <span class="partners-pill">
+            <i class="fa-solid fa-hand-holding-droplet"></i>
+            Unión de Comunidades y Ejidos de los Valles Centrales de Oaxaca por la Conservación de Bosques y Agua A.C.
+          </span>
+          <span class="partners-pill">
+            <i class="fa-solid fa-mountain-sun"></i>
+            Comisión Nacional de Áreas Naturales Protegidas
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <a href="index.html" class="active"><i class="fa-solid fa-house"></i> Inicio</a>
+      <a href="pois.html"><i class="fa-solid fa-landmark"></i> Patrimonio vivo</a>
+      <a href="modelos.html"><i class="fa-solid fa-diagram-project"></i> Modelos de decisión</a>
+      <a href="participacion.html"><i class="fa-solid fa-users"></i> Saberes de la comunidad</a>
+      <a href="#"><i class="fa-solid fa-database"></i> Evidencia y datos</a>
+    </nav>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="kpi-pts">—</div><div>Puntos</div></div>
+      <div class="kpi"><div class="v" id="kpi-area">—</div><div>Área corredor</div></div>
+      <!-- NUEVO: KPI de POIs -->
+      <div class="kpi"><div class="v" id="kpi-pois">—</div><div>POIs Huitzo</div></div>
+    </div>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <!-- Botón info (abre modal Tailwind) -->
+    <button id="btn-info"
+      class="absolute left-3 top-3 z-[560] h-11 px-4 rounded-xl bg-white text-emerald-900 font-extrabold border border-emerald-100 shadow-md hover:-translate-y-0.5 transition flex items-center gap-2">
+      <i class="fa-solid fa-circle-info"></i> ¿Qué es esto?
+    </button>
+
+    <!-- Geocoder (único buscador, centrado) -->
+    <div class="geocoder-wrap" id="gc-wrap"></div>
+
+    <!-- Panel de capas -->
+    <aside class="panel" id="panel">
+      <h4><i class="fa-solid fa-layer-group"></i> Capas principales</h4>
+
+      <!-- Base -->
+      <div class="block">
+        <b><i class="fa-solid fa-globe"></i> Escena de fondo</b>
+        <label class="item">
+          <input type="radio" name="base" id="base-osm" checked>
+          <span class="lbl">OSM Estándar</span>
+        </label>
+        <label class="item">
+          <input type="radio" name="base" id="base-sat">
+          <span class="lbl">Esri Satélite</span>
+        </label>
+        <label class="item">
+          <input type="radio" name="base" id="base-topo">
+          <span class="lbl">Esri Topo</span>
+        </label>
+        <div class="item" id="sat-op-row" style="display:none">
+          <span class="lbl">Opacidad satélite</span>
+          <input id="sat-opacity" type="range" min="0.2" max="1" step="0.05" value="1">
+        </div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- Comunidades -->
+      <div class="block">
+        <b><i class="fa-solid fa-tree-city"></i> Comunidades del corredor</b>
+        <label class="item">
+          <input type="checkbox" id="lyr-pts" checked>
+          <span class="lbl">Municipios (puntos)</span>
+        </label>
+        <ul style="list-style:none; padding-left:10px; margin-top:6px; line-height:1.6;font-size:12px;color:#e5e7eb;">
+          <li>🌿 San Pablo Huitzo</li>
+          <li>🌿 San Francisco Telixtlahuaca</li>
+          <li>🌿 Santiago Suchilquitongo</li>
+          <li>🌿 San Pablo Villa de Mitla</li>
+          <li>🌿 La Unión Zapata</li>
+          <li>🌿 Villa Díaz Ordaz</li>
+          <li>🌿 San Juan Bautista Guelache</li>
+          <li>🌿 San Miguel Etla</li>
+          <li>🌿 Tlalixtac de Cabrera</li>
+          <li>🌿 San Antonio de la Cal</li>
+          <li>🌿 San Agustín de las Juntas</li>
+          <li>🌿 San Marcos Tlapazola</li>
+          <li>🌿 San Bartolomé Quialana</li>
+          <li>🌿 San Gabriel Etla</li>
+        </ul>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- Geometrías -->
+      <div class="block">
+        <b><i class="fa-solid fa-draw-polygon"></i> Geometrías del corredor</b>
+        <label class="item"><input type="checkbox" id="lyr-concave" checked> <span class="lbl">Área del corredor (cóncava)</span></label>
+        <label class="item"><input type="checkbox" id="lyr-convex"> <span class="lbl">Envolvente (convexa)</span></label>
+        <div class="item">
+          <span class="lbl">Opacidad área</span>
+          <input id="poly-opacity" type="range" min="0" max="0.6" step="0.02" value="0.14">
+        </div>
+      </div>
+
+      <!-- Tejido biocultural -->
+      <div class="block">
+        <b><i class="fa-solid fa-people-roof"></i> Tejido biocultural</b>
+        <label class="item"><input type="checkbox" id="fiestas" checked> <span class="lbl">Fiestas y rituales (demo)</span></label>
+        <label class="item"><input type="checkbox" id="rutas" checked> <span class="lbl">Rutas bioculturales (demo)</span></label>
+        <label class="item"><input type="checkbox" id="miradores"> <span class="lbl">Miradores y paisajes (demo)</span></label>
+      </div>
+
+      <!-- Agrobiodiversidad -->
+      <div class="block">
+        <b><i class="fa-solid fa-seedling"></i> Agrobiodiversidad</b>
+        <label class="item"><input type="checkbox" id="agrobio" checked> <span class="lbl">Parcelas clave y maíces nativos (demo)</span></label>
+        <label class="item"><input type="checkbox" id="springs" checked> <span class="lbl">Manantiales (demo)</span></label>
+        <label class="item"><input type="checkbox" id="roads" checked> <span class="lbl">Caminos y accesos (demo)</span></label>
+      </div>
+
+      <!-- Presiones y memoria -->
+      <div class="block">
+        <b><i class="fa-solid fa-triangle-exclamation"></i> Presiones y memoria</b>
+        <label class="item"><input type="checkbox" id="saberes-riesgo" checked> <span class="lbl">Saberes en riesgo (demo)</span></label>
+        <label class="item"><input type="checkbox" id="dumps" checked> <span class="lbl">Tiraderos (demo)</span></label>
+        <label class="item"><input type="checkbox" id="fires"> <span class="lbl">Incendios (demo)</span></label>
+        <label class="item"><input type="checkbox" id="participacion" checked> <span class="lbl">Intensidad de participación (demo)</span></label>
+      </div>
+
+      <!-- POIs -->
+      <div class="block">
+        <b><i class="fa-solid fa-location-dot"></i> Patrimonio vivo — San Pablo Huitzo</b>
+        <label class="item">
+          <input type="checkbox" id="pois-all" checked>
+          <span class="lbl">POIs (todas las categorías)</span>
+        </label>
+        <div id="pois-cats" style="margin-left:8px"></div>
+      </div>
+
+      <div class="sep"></div>
+
+      <!-- Botones -->
+      <div class="block">
+        <button class="btn" id="btn-focus"><i class="fa-regular fa-square"></i> Enfocar corredor</button>
+        <button class="btn" id="btn-export-gj"><i class="fa-solid fa-file-export"></i> Exportar GeoJSON</button>
+      </div>
+    </aside>
+
+    <div class="legend" id="legend"></div>
+
+    <!-- NUEVO: control coordenadas -->
+    <div class="coords" id="coords">Lat: — · Lon: — (EPSG:4326)</div>
+
+    <!-- NUEVO: flecha norte -->
+    <div class="north-arrow" title="Norte">
+      N
+    </div>
+
+    <!-- MODAL / CARD -->
+<div id="modal"
+  class="fixed inset-0 z-[580] bg-emerald-900/30 backdrop-blur-sm flex items-center justify-center p-6">
+
+  <div class="w-full max-w-full mx-10 rounded-3xl bg-gradient-to-br from-emerald-50 via-amber-50 to-lime-50 text-emerald-950 shadow-xl border border-emerald-100">
+
+    <div class="px-12 pt-8 pb-6">
+
+      <!-- TÍTULO -->
+      <div class="flex items-start justify-between">
+        <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-emerald-900">
+          Geoportal Biocultural de Oaxaca
+        </h1>
+
+        <button id="modal-close"
+          class="h-10 w-10 rounded-lg bg-emerald-100 text-emerald-800 font-bold hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+          ✕
+        </button>
+      </div>
+
+      <!-- LOGOS INSTITUCIONALES -->
+      <div class="mt-10 flex flex-wrap justify-center items-center gap-10">
+
+          <!-- IPN institucional -->
+        <img src="IPN-Logoxx.png"
+             class="h-32 md:h-36 object-contain drop-shadow-lg"
+             alt="Instituto Politécnico Nacional">
+             
+             
+        <!-- CVDR Oaxaca -->
+        <img src="logocvdr.jpg"
+             class="h-28 md:h-32 object-contain drop-shadow-lg"
+             alt="CVDR Oaxaca">
+
+
+        <!-- CONANP -->
+        <img src="conamp.jpg"
+             class="h-28 md:h-32 object-contain drop-shadow-lg"
+             alt="CONANP">
+
+        <!-- Unión de Comunidades y Ejidos -->
+        <img src="union-comunidades.jpg"
+             class="h-28 md:h-32 object-contain drop-shadow-lg"
+             alt="Unión de Comunidades y Ejidos">
+
+
+      </div>
+
+      <!-- DESCRIPCIÓN -->
+      <p class="mt-6 text-lg leading-relaxed max-w-6xl">
+        Esta cartografía reúne <b>saberes, oficios, lugares, fiestas y memorias</b> que dan forma al territorio.  
+        Reconoce cómo las comunidades <b>habitan, cuidan y transmiten</b> su conocimiento en diálogo con la naturaleza.
+      </p>
+
+      <!-- CREDITOS -->
+      <div class="mt-4 text-sm text-emerald-900 flex flex-wrap gap-3 items-center">
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-200">
+          <i class="fa-solid fa-hand-holding-droplet text-emerald-700"></i>
+          Unión de Comunidades y Ejidos de los Valles Centrales de Oaxaca por la Conservación de Bosques y Agua A.C.
+        </span>
+
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-200">
+          <i class="fa-solid fa-mountain-sun text-amber-700"></i>
+          Comisión Nacional de Áreas Naturales Protegidas
+        </span>
+
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-200">
+          <i class="fa-solid fa-gear text-emerald-700"></i>
+          Centro de Vinculación y Desarrollo Regional – IPN Oaxaca
+        </span>
+      </div>
+
+      <!-- TARJETAS (las dejo intactas como las tenías) -->
+      <div class="mt-8 grid grid-cols-5 gap-5 text-[15px]">
+        <div class="rounded-xl border border-emerald-200 bg-white/90 p-4 text-center shadow-sm">
+          <div class="font-semibold text-emerald-800 mb-1">
+            <i class="fa-solid fa-leaf text-lime-700"></i>
+          </div>
+          <p><b>Saberes y oficios</b><br>Prácticas agrícolas, medicina tradicional, alfarería y arte popular.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-white/90 p-4 text-center shadow-sm">
+          <div class="font-semibold text-emerald-800 mb-1">
+            <i class="fa-solid fa-mountain-sun text-amber-700"></i>
+          </div>
+          <p><b>Lugares significativos</b><br>Manantiales, cerros, templos y senderos que sostienen la vida.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-white/90 p-4 text-center shadow-sm">
+          <div class="font-semibold text-emerald-800 mb-1">
+            <i class="fa-solid fa-house-chimney text-emerald-700"></i>
+          </div>
+          <p><b>Arquitectura vernácula</b><br>Casas de adobe, cal y palma: herencia y adaptación al entorno.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-white/90 p-4 text-center shadow-sm">
+          <div class="font-semibold text-emerald-800 mb-1">
+            <i class="fa-solid fa-route text-emerald-700"></i>
+          </div>
+          <p><b>Rutas bioculturales</b><br>Caminos, trueques, festividades y peregrinaciones que unen comunidades.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-white/90 p-4 text-center shadow-sm">
+          <div class="font-semibold text-emerald-800 mb-1">
+            <i class="fa-solid fa-people-group text-amber-700"></i>
+          </div>
+          <p><b>Custodios del territorio</b><br>Colectivos que conservan y transmiten prácticas de cuidado.</p>
+        </div>
+      </div>
+
+      <!-- SEGUNDA SECCIÓN DE TARJETAS -->
+      <div class="mt-10 grid grid-cols-5 gap-5 text-[14px]">
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-lime-100 p-3 text-center">
+          <i class="fa-solid fa-seedling text-lime-700 text-xl"></i>
+          <p><b>Sostenibilidad</b><br>Conservación de biodiversidad y uso responsable del entorno.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-amber-50 to-emerald-50 p-3 text-center">
+          <i class="fa-solid fa-masks-theater text-amber-700 text-xl"></i>
+          <p><b>Identidad cultural</b><br>Preservación de tradiciones, lenguas y expresiones locales.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-lime-50 to-amber-50 p-3 text-center">
+          <i class="fa-solid fa-book-open text-emerald-700 text-xl"></i>
+          <p><b>Conciencia ambiental</b><br>Educación y sensibilización intergeneracional.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-amber-50 to-lime-100 p-3 text-center">
+          <i class="fa-solid fa-hand-holding-heart text-lime-700 text-xl"></i>
+          <p><b>Legado futuro</b><br>Uso sostenible de recursos para próximas generaciones.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-lime-100 p-3 text-center">
+          <i class="fa-solid fa-people-carry-box text-amber-700 text-xl"></i>
+          <p><b>Desarrollo local</b><br>Economía solidaria, oficios y turismo responsable.</p>
+        </div>
+      </div>
+
+      <!-- PRINCIPIOS -->
+      <div class="mt-10 grid grid-cols-3 gap-6 text-[14px] text-center">
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-100 to-white p-4">
+          <i class="fa-solid fa-handshake-angle text-emerald-700 text-xl"></i>
+          <p><b>Consentimiento</b><br>Libre, previo e informado.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-100 to-white p-4">
+          <i class="fa-solid fa-scale-balanced text-emerald-700 text-xl"></i>
+          <p><b>Gobernanza</b><br>Decisiones comunales y respeto a usos y costumbres.</p>
+        </div>
+
+        <div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-100 to-white p-4">
+          <i class="fa-solid fa-user-shield text-emerald-700 text-xl"></i>
+          <p><b>Resguardo</b><br>Protección y reconocimiento del conocimiento local.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTÓN -->
+    <div class="px-12 pb-8">
+      <button id="modal-ok"
+        class="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-lime-600 text-white font-extrabold text-lg shadow-md hover:from-emerald-700 hover:to-lime-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 transition">
+        Entendido
+      </button>
+    </div>
+
+  </div>
+</div>
+
+
+  <footer>
+    <div class="foot-main">
+      <img src="logocvdr.jpg" alt="CVDR Oaxaca" />
+      <span>Centro de Vinculación y Desarrollo Regional Oaxaca · Instituto Politécnico Nacional</span>
+    </div>
+    <div class="foot-partners">
+      <span class="foot-pill">
+        <i class="fa-solid fa-hand-holding-droplet"></i>
+        Unión de Comunidades y Ejidos de los Valles Centrales de Oaxaca por la Conservación de Bosques y Agua A.C.
+      </span>
+      <span class="foot-pill">
+        <i class="fa-solid fa-mountain-sun"></i>
+        Comisión Nacional de Áreas Naturales Protegidas
+      </span>
+      <a href="#" class="privacy">Aviso de privacidad</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ========= Helpers ========= */
+const $ = (id)=>document.getElementById(id);
+const slug = (s)=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|_/g,'');
+
+/* ========= Mapa (Web Mercator, EPSG:3857) ========= */
+const map=L.map('map',{
+  center:[17.05,-96.65],
+  zoom:9,
+  zoomControl:true,
+  preferCanvas:true
+});
+new L.Hash(map);
+
+/* NUEVO: barra de escala */
+L.control.scale({position:'bottomright',metric:true,imperial:false}).addTo(map);
+
+/* Bases */
+const baseOSM=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
+const baseSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri/Maxar',opacity:1});
+const baseTopo=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'});
+baseOSM.addTo(map);
+
+function setBase(which){
+  const s=$('sat-opacity'), row=$('sat-op-row');
+  [baseOSM,baseSat,baseTopo].forEach(l=>map.removeLayer(l));
+  if(which==='osm'){baseOSM.addTo(map); row.style.display='none';}
+  if(which==='sat'){baseSat.addTo(map); row.style.display='flex'; s.disabled=false;}
+  if(which==='topo'){baseTopo.addTo(map); row.style.display='none';}
+}
+$('base-osm').onchange=e=>e.target.checked&&setBase('osm');
+$('base-sat').onchange=e=>e.target.checked&&setBase('sat');
+$('base-topo').onchange=e=>e.target.checked&&setBase('topo');
+$('sat-opacity').oninput=e=>baseSat.setOpacity(parseFloat(e.target.value));
+
+/* Geocoder centrado */
+const gc=L.Control.geocoder({defaultMarkGeocode:false, placeholder:'San Pablo Huitzo, Oaxaca, 68220, México'});
+const gcCtrl=gc.addTo(map);
+$('gc-wrap').appendChild(gcCtrl.getContainer());
+gc.on('markgeocode',e=>{
+  const b=e.geocode.bbox; const bb=L.latLngBounds(b.getSouthEast(),b.getNorthWest());
+  map.fitBounds(bb.pad(.12));
+});
+
+/* ========= Municipios (puntos) ========= */
+const places=[
+  { name:"San Pablo Huitzo, Oaxaca, Mexico", lat:17.2667, lng:-96.8833 },
+  { name:"San Francisco Telixtlahuaca, Oaxaca, Mexico", lat:17.3167, lng:-96.9000 },
+  { name:"Santiago Suchilquitongo, Oaxaca, Mexico", lat:17.2333, lng:-96.8667 },
+  { name:"San Pablo Villa de Mitla, Oaxaca, Mexico", lat:16.9261, lng:-96.3597 },
+  { name:"La Unión Zapata, Oaxaca, Mexico", lat:17.1000, lng:-96.8000 },
+  { name:"Villa Díaz Ordaz, Oaxaca, Mexico", lat:17.2000, lng:-96.7500 },
+  { name:"San Juan Bautista Guelache, Oaxaca, Mexico", lat:17.1833, lng:-96.8167 },
+  { name:"San Miguel Etla, Oaxaca, Mexico", lat:17.2000, lng:-96.8000 },
+  { name:"Tlalixtac de Cabrera, Oaxaca, Mexico", lat:17.1167, lng:-96.6833 },
+  { name:"San Antonio de la Cal, Oaxaca, Mexico", lat:17.0833, lng:-96.7167 },
+  { name:"San Agustín de las Juntas, Oaxaca, Mexico", lat:17.0667, lng:-96.7333 },
+  { name:"San Marcos Tlapazola, Oaxaca, Mexico", lat:16.9500, lng:-96.7000 },
+  { name:"San Bartolomé Quialana, Oaxaca, Mexico", lat:16.8833, lng:-96.6167 },
+  { name:"San Gabriel Etla, Oaxaca, Mexico", lat:17.2136, lng:-96.7692 }
+];
+const fcPoints={type:'FeatureCollection',features:places.map(p=>({type:'Feature',geometry:{type:'Point',coordinates:[p.lng,p.lat]},properties:{name:p.name}}))};
+
+function pinHTML(c='#22c55e'){
+  return `<div style="transform:translate(-50%,-100%);filter:drop-shadow(0 3px 8px rgba(0,0,0,.45))">
+    <svg viewBox="0 0 28 38" width="28" height="38" aria-hidden="true">
+      <defs>
+        <linearGradient id="pinGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${c}"/>
+          <stop offset="100%" stop-color="#16a34a"/>
+        </linearGradient>
+      </defs>
+      <path d="M14 2c-6.1 0-11 4.64-11 10.36 0 7.24 9.5 18.56 10.08 19.28a1.2 1.2 0 0 0 1.84 0C15.5 30.92 25 19.6 25 12.36 25 6.64 20.1 2 14 2z" fill="#020617"/>
+      <path d="M14 3.4c-5.35 0-9.65 4.07-9.65 9.1 0 6.38 8.35 16.35 8.86 16.98.33.4.95.4 1.28 0 .51-.63 8.86-10.6 8.86-16.98 0-5.03-4.3-9.1-9.65-9.1z"
+        fill="url(#pinGrad)" stroke="#022c22" stroke-width="1.1"/>
+      <circle cx="14" cy="12.5" r="3.2" fill="rgba(248,250,252,.98)"/>
+    </svg>
+  </div>`;
+}
+const labels=L.layerGroup();
+const layerPoints=L.geoJSON(fcPoints,{
+  pointToLayer:(f,latlng)=>{
+    const icon=L.divIcon({className:'',html:pinHTML(),iconSize:[28,38],iconAnchor:[14,38]});
+    const m=L.marker(latlng,{icon, riseOnHover:true});
+    const coords=`${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`; // NUEVO: menos decimales
+    m.bindPopup(`<b>${f.properties.name}</b><br><small>${coords}</small>`);
+    L.marker(latlng,{icon:L.divIcon({className:'label-mpio',html:`<div style="font-weight:700;color:#022c22;background:rgba(248,250,252,.96);padding:2px 6px;border-radius:6px;border:1px solid #cbd5f5;font-size:11px">${f.properties.name.replace(', Oaxaca, Mexico','')}</div>`,iconSize:[0,0],iconAnchor:[-6,44]})}).addTo(labels);
+    return m;
+  }
+});
+labels.addTo(map);
+
+/* Área corredor cóncavo/convexo */
+let polyConcave=null, polyConvex=null;
+try{polyConcave=turf.concave(fcPoints,{maxEdge:20,units:'kilometers'});}catch(e){}
+try{polyConvex=turf.convex(fcPoints);}catch(e){}
+if(!polyConcave){
+  const bufs=fcPoints.features.map(pt=>turf.buffer(pt,2,{units:'kilometers'}));
+  let uni=bufs[0]; for(let i=1;i<bufs.length;i++) uni=turf.union(uni,bufs[i]); polyConcave=uni;
+}
+const layerConcave=L.geoJSON(polyConcave,{style:{color:'#22c55e',weight:2,fillColor:'#86efac',fillOpacity:.14}});
+const layerConvex=L.geoJSON(polyConvex||{type:'FeatureCollection',features:[]},{style:{color:'#38bdf8',weight:2,fillOpacity:0, dashArray:'8 6'}});
+layerPoints.addTo(map); layerConcave.addTo(map);
+
+/* NUEVO: limitar navegación al corredor (con cierto margen) */
+const fg=L.featureGroup([layerPoints,layerConcave]);
+const corredorBounds = fg.getBounds().pad(.08);
+map.fitBounds(corredorBounds);
+map.setMaxBounds(corredorBounds.pad(0.4));
+
+/* KPIs */
+$('kpi-pts').textContent=fcPoints.features.length;
+$('kpi-area').textContent=(turf.area(polyConcave)/1e6).toFixed(2)+' km²';
+
+/* ========= POIs Huitzo ========= */
+const POIS_URL='https://raw.githubusercontent.com/hermecp/geoportalbiocultural/refs/heads/main/huitzo_pois.geojson';
+const CAT_COLORS={
+  'espacios culturales y artísticos':'#f97316',
+  'sitios de patrimonio':'#8b5cf6',
+  'lugares de expresión popular y tradicional':'#06b6d4',
+  'rutas y espacios bioculturales':'#22c55e',
+  'centros de enseñanza y difusión':'#ef4444',
+  'Zona arqueológica':'#eab308'
+};
+let poisAllGroup = L.layerGroup().addTo(map);
+const poisByCat = new Map();
+
+function iconPOI(cat=''){
+  const c=CAT_COLORS[cat]||'#22c55e';
+  const html=`<div style="transform:translate(-50%,-100%);filter:drop-shadow(0 3px 8px rgba(0,0,0,.45))">
+    <svg viewBox="0 0 28 38" width="28" height="38" aria-hidden="true">
+      <defs>
+        <linearGradient id="poiGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${c}"/>
+          <stop offset="100%" stop-color="#0f172a"/>
+        </linearGradient>
+      </defs>
+      <path d="M14 2c-6.1 0-11 4.64-11 10.36 0 7.24 9.5 18.56 10.08 19.28a1.2 1.2 0 0 0 1.84 0C15.5 30.92 25 19.6 25 12.36 25 6.64 20.1 2 14 2z" fill="#020617"/>
+      <path d="M14 3.4c-5.35 0-9.65 4.07-9.65 9.1 0 6.38 8.35 16.35 8.86 16.98.33.4.95.4 1.28 0 .51-.63 8.86-10.6 8.86-16.98 0-5.03-4.3-9.1-9.65-9.1z"
+        fill="url(#poiGrad)" stroke="#020617" stroke-width="1.1"/>
+      <circle cx="14" cy="12.5" r="3.2" fill="rgba(248,250,252,.98)"/>
+    </svg>
+  </div>`;
+  return L.divIcon({className:'',html,iconSize:[28,38],iconAnchor:[14,38]});
+}
+function mediaHTML(m){
+  if(!m) return '';
+  const isURL=/^https?:\/\//i.test(m);
+  const isImg=/\.(png|jpe?g|webp|gif)$/i.test(m);
+  if(isImg) return `<img src="${m}" alt="" style="max-width:220px;display:block;margin-top:6px;border-radius:6px">`;
+  if(isURL) return `<a href="${m}" target="_blank" rel="noopener">Ver recurso</a>`;
+  return `<span>${m}</span>`;
+}
+function popupPOI(p, ll){
+  const coords=`${ll.lat.toFixed(4)}, ${ll.lng.toFixed(4)}`;
+  const fuente=p?.source_citation?`<div style="margin-top:6px"><small>Fuente: <a href="${p.source_citation}" target="_blank" rel="noopener">enlace</a></small></div>`:'';
+  return `<div style="min-width:220px;max-width:280px">
+    <strong style="font-size:16px">${p?.name||'POI'}</strong>
+    <div style="opacity:.9">${p?.category||''}</div>
+    ${p?.Lugar?`<div><small>${p.Lugar}</small></div>`:''}
+    <div style="margin-top:6px">${p?.description||''}</div>
+    ${fuente}
+    ${p?.media?mediaHTML(p.media):''}
+    <div style="margin-top:6px;opacity:.75"><small>${coords} · EPSG:4326</small></div>
+  </div>`;
+}
+
+/* NUEVO: actualiza KPI de POIs */
+function updateKpiPois(total){
+  const el = $('kpi-pois');
+  if(el) el.textContent = total ?? '—';
+}
+
+async function loadPOIsHuitzo(){
+  const boxCats = document.getElementById('pois-cats');
+  if(!boxCats) return;
+  boxCats.innerHTML = '<div style="font-size:13px;opacity:.8">Cargando…</div>';
+
+  try{
+    poisAllGroup.clearLayers();
+    poisByCat.forEach(g=>g.clearLayers()); poisByCat.clear();
+
+    const res = await fetch(POIS_URL,{cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const gj = await res.json();
+
+    gj.features.forEach(f=>{
+      const cat = f.properties?.category || 'sin-categoria';
+      if(!poisByCat.has(cat)) poisByCat.set(cat, L.layerGroup());
+      const ll = L.latLng(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+      const m = L.marker(ll,{icon:iconPOI(cat),riseOnHover:true});
+      m.bindPopup(popupPOI(f.properties||{}, ll));
+      poisByCat.get(cat).addLayer(m);
+      poisAllGroup.addLayer(m);
+    });
+
+    updateKpiPois(gj.features.length); // NUEVO
+
+    const sortedCats = [...poisByCat.keys()].sort((a,b)=>a.localeCompare(b));
+    boxCats.innerHTML = sortedCats.map(cat=>{
+      const id = `pois-cat-${slug(cat)}`;
+      const count = poisByCat.get(cat).getLayers().length;
+      const sw = CAT_COLORS[cat] || '#22c55e';
+      return `
+        <label class="item" style="font-size:13px;">
+          <input type="checkbox" id="${id}" data-cat="${cat}" checked>
+          <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${sw};border:1px solid rgba(15,23,42,.9)"></span>
+          <span>${cat} <small style="opacity:.7">(${count})</small></span>
+        </label>`;
+    }).join('');
+
+    sortedCats.forEach(cat=>{
+      const id = `pois-cat-${slug(cat)}`;
+      const el = document.getElementById(id);
+      el?.addEventListener('change', e=>{
+        const on = e.target.checked;
+        const grp = poisByCat.get(cat);
+        if(!grp) return;
+        if(on){ grp.addTo(map); } else { map.removeLayer(grp); }
+        const allOn = [...document.querySelectorAll('#pois-cats input[type="checkbox"]')].every(i=>i.checked);
+        document.getElementById('pois-all').checked = allOn;
+        renderLegend();
+      });
+      poisByCat.get(cat).addTo(map);
+    });
+
+    const master = document.getElementById('pois-all');
+    master.onchange = e=>{
+      const on = e.target.checked;
+      document.querySelectorAll('#pois-cats input[type="checkbox"]').forEach(i=>{
+        i.checked = on;
+        i.dispatchEvent(new Event('change'));
+      });
+    };
+  }catch(err){
+    console.error('POIs Huitzo no disponibles:', err);
+    poisAllGroup.clearLayers();
+    updateKpiPois(null); // NUEVO
+    document.getElementById('pois-cats').innerHTML =
+      `<div style="font-size:13px;opacity:.8;color:#fca5a5">No se pudieron cargar los POIs (offline o red). El resto del mapa funciona.</div>`;
+  }
+
+  renderLegend();
+}
+loadPOIsHuitzo();
+
+/* ========= Capas extra DEMO ========= */
+
+/* Agua y accesos */
+const lyrSprings=L.layerGroup([
+  L.circleMarker([17.24,-96.82],{radius:5,color:'#0ea5e9',fillColor:'#0ea5e9',fillOpacity:.9}).bindPopup('Manantial (demo)'),
+  L.circleMarker([17.18,-96.78],{radius:5,color:'#0ea5e9',fillColor:'#0ea5e9',fillOpacity:.9}).bindPopup('Manantial (demo)')
+]);
+const lyrRoads=L.polyline(
+  [[17.33,-96.98],[17.28,-96.90],[17.24,-96.83],[17.20,-96.75],[17.16,-96.69],[17.10,-96.63]],
+  {color:'#9ca3af',weight:3,opacity:.7}
+);
+
+/* Fiestas y rituales (puntos violetas) */
+const lyrFiestas=L.layerGroup([
+  L.circleMarker([17.27,-96.87],{radius:7,color:'#a855f7',fillColor:'#a855f7',fillOpacity:.9}).bindPopup('Fiesta patronal (demo)'),
+  L.circleMarker([17.20,-96.80],{radius:6,color:'#a855f7',fillColor:'#a855f7',fillOpacity:.9}).bindPopup('Celebración comunitaria (demo)')
+]);
+
+/* Saberes en riesgo: marcadores especiales */
+function riesgoIcon(nivel){
+  const colors={alto:'#ef4444',medio:'#f97316',bajo:'#facc15'};
+  const c=colors[nivel]||'#ef4444';
+  return L.divIcon({
+    className:'',
+    html:`<div style="transform:translate(-50%,-100%);filter:drop-shadow(0 3px 8px rgba(0,0,0,.5))">
+      <svg viewBox="0 0 28 38" width="28" height="38">
+        <path d="M14 2c-6.1 0-11 4.64-11 10.36 0 7.24 9.5 18.56 10.08 19.28a1.2 1.2 0 0 0 1.84 0C15.5 30.92 25 19.6 25 12.36 25 6.64 20.1 2 14 2z" fill="#020617"/>
+        <path d="M14 3.4c-5.35 0-9.65 4.07-9.65 9.1 0 6.38 8.35 16.35 8.86 16.98.33.4.95.4 1.28 0 .51-.63 8.86-10.6 8.86-16.98 0-5.03-4.3-9.1-9.65-9.1z" fill="${c}" stroke="#020617" stroke-width="1.1"/>
+        <text x="14" y="16" text-anchor="middle" font-size="10" fill="#f9fafb" font-family="system-ui">!</text>
+      </svg>
+    </div>`
+  });
+}
+const lyrSaberesRiesgo=L.layerGroup([
+  L.marker([17.30,-96.90],{icon:riesgoIcon('alto')}).bindPopup('Taller artesanal en riesgo (demo)'),
+  L.marker([17.19,-96.76],{icon:riesgoIcon('medio')}).bindPopup('Práctica agrícola en transición (demo)')
+]);
+
+/* Agrobiodiversidad (parcelas demo) */
+const lyrAgrobio=L.layerGroup([
+  L.polygon([[17.26,-96.89],[17.25,-96.87],[17.24,-96.88]],{color:'#22c55e',weight:1,fillColor:'#4ade80',fillOpacity:.55})
+    .bindPopup('Parcela de maíz nativo (demo)'),
+  L.polygon([[17.21,-96.79],[17.20,-96.77],[17.19,-96.79]],{color:'#15803d',weight:1,fillColor:'#86efac',fillOpacity:.55})
+    .bindPopup('Sistema milpa (demo)')
+]);
+
+/* Rutas bioculturales */
+const lyrRutas=L.layerGroup([
+  L.polyline([[17.27,-96.88],[17.24,-96.83],[17.22,-96.79]],{color:'#22c55e',weight:4,opacity:.9,dashArray:'4 6'})
+    .bindPopup('Ruta biocultural demostrativa'),
+  L.polyline([[17.18,-96.80],[17.16,-96.74],[17.15,-96.70]],{color:'#22c55e',weight:4,opacity:.9,dashArray:'4 6'})
+]);
+
+/* Miradores / paisajes */
+const lyrMiradores=L.layerGroup([
+  L.circleMarker([17.23,-96.84],{radius:7,color:'#0ea5e9',fillColor:'#facc15',fillOpacity:.95})
+    .bindPopup('Mirador panorámico (demo)')
+]);
+
+/* Participación: círculos suaves tipo “heatmap” */
+const lyrParticipacion=L.layerGroup([
+  L.circle([17.24,-96.83],{radius:2500,color:'#22c55e',fillColor:'#4ade80',fillOpacity:.25,weight:1})
+    .bindPopup('Alta participación comunitaria (demo)'),
+  L.circle([17.18,-96.78],{radius:2000,color:'#84cc16',fillColor:'#bef264',fillOpacity:.25,weight:1})
+    .bindPopup('Participación media (demo)')
+]);
+
+/* Tiraderos e incendios */
+const lyrDumps=L.layerGroup([
+  L.circleMarker([17.24,-96.88],{radius:6,color:'#b45309',fillColor:'#b45309',fillOpacity:.9}).bindPopup('Tiradero (demo)'),
+  L.circleMarker([17.18,-96.80],{radius:6,color:'#b45309',fillColor:'#b45309',fillOpacity:.9}).bindPopup('Tiradero (demo)')
+]);
+const lyrFires=L.layerGroup([
+  L.circleMarker([17.21,-96.70],{radius:6,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9}).bindPopup('Incendio (demo)')
+]);
+
+/* Activar varias por defecto */
+lyrSprings.addTo(map);
+lyrRoads.addTo(map);
+lyrDumps.addTo(map);
+lyrFiestas.addTo(map);
+lyrAgrobio.addTo(map);
+lyrSaberesRiesgo.addTo(map);
+lyrRutas.addTo(map);
+lyrParticipacion.addTo(map);
+
+/* ========= Toggle genérico ========= */
+const toggleMap=new Map([
+  ['lyr-pts',layerPoints],
+  ['lyr-concave',layerConcave],
+  ['lyr-convex',layerConvex],
+  ['springs',lyrSprings],
+  ['roads',lyrRoads],
+  ['dumps',lyrDumps],
+  ['fires',lyrFires],
+  ['fiestas',lyrFiestas],
+  ['saberes-riesgo',lyrSaberesRiesgo],
+  ['agrobio',lyrAgrobio],
+  ['rutas',lyrRutas],
+  ['miradores',lyrMiradores],
+  ['participacion',lyrParticipacion]
+]);
+
+function toggleById(id,on){
+  const lyr=toggleMap.get(id); if(!lyr) return;
+  on?lyr.addTo(map):map.removeLayer(lyr);
+
+  /* NUEVO: al apagar municipios, también apagar etiquetas; al encender, encender etiquetas */
+  if(id==='lyr-pts'){
+    if(on){ labels.addTo(map); } else { map.removeLayer(labels); }
+  }
+
+  renderLegend();
+}
+for(const id of toggleMap.keys()){
+  const el=$(id); if(el) el.addEventListener('change',e=>toggleById(id,e.target.checked));
+}
+
+$('poly-opacity').oninput=e=>{
+  const op=parseFloat(e.target.value);
+  layerConcave.setStyle({fillOpacity:op});
+  layerConvex.setStyle({fillOpacity:Math.max(0,op-0.05)});
+};
+
+/* ========= Leyenda ========= */
+function renderLegend(){
+  const Lg=$('legend');
+
+  const rowsCorredor=[];
+  const rowsTejido=[];
+  const rowsAgua=[];
+  const rowsPresiones=[];
+  const rowsPOIs=[];
+
+  if(map.hasLayer(layerConcave))
+    rowsCorredor.push(`<div class="legend-row"><span class="sw" style="background:#86efac;border-color:#22c55e"></span><span class="legend-row-label">Área del corredor</span></div>`);
+  if(map.hasLayer(layerConvex))
+    rowsCorredor.push(`<div class="legend-row"><span class="sw" style="background:transparent;border:2px dashed #38bdf8"></span><span class="legend-row-label">Envolvente convexa</span></div>`);
+  if(map.hasLayer(layerPoints))
+    rowsCorredor.push(`<div class="legend-row"><i class="fa-solid fa-location-dot" style="font-size:13px;margin-right:4px;color:#22c55e"></i><span class="legend-row-label">Municipios</span></div>`);
+
+  if(map.hasLayer(lyrRutas))
+    rowsTejido.push(`<div class="legend-row"><span class="sw" style="background:#22c55e;border-color:#15803d"></span><span class="legend-row-label">Rutas bioculturales</span></div>`);
+  if(map.hasLayer(lyrFiestas))
+    rowsTejido.push(`<div class="legend-row"><span class="sw" style="background:#a855f7;border-color:#7e22ce"></span><span class="legend-row-label">Fiestas y rituales</span></div>`);
+  if(map.hasLayer(lyrMiradores))
+    rowsTejido.push(`<div class="legend-row"><span class="sw" style="background:radial-gradient(circle,#facc15,#0ea5e9);border-color:#0ea5e9"></span><span class="legend-row-label">Miradores</span></div>`);
+
+  if(map.hasLayer(lyrAgrobio))
+    rowsAgua.push(`<div class="legend-row"><span class="sw" style="background:#4ade80;border-color:#16a34a"></span><span class="legend-row-label">Parcelas y maíces nativos</span></div>`);
+  if(map.hasLayer(lyrRoads))
+    rowsAgua.push(`<div class="legend-row"><span class="sw" style="background:#9ca3af;border-color:#9ca3af"></span><span class="legend-row-label">Caminos y accesos</span></div>`);
+  if(map.hasLayer(lyrSprings))
+    rowsAgua.push(`<div class="legend-row"><span class="sw" style="background:#0ea5e9;border-color:#0ea5e9"></span><span class="legend-row-label">Manantiales</span></div>`);
+  if(map.hasLayer(lyrParticipacion))
+    rowsAgua.push(`<div class="legend-row"><span class="sw" style="background:linear-gradient(90deg,#bbf7d0,#22c55e);border-color:#16a34a"></span><span class="legend-row-label">Intensidad de participación</span></div>`);
+
+  if(map.hasLayer(lyrSaberesRiesgo))
+    rowsPresiones.push(`<div class="legend-row"><span class="sw" style="background:linear-gradient(90deg,#f97316,#ef4444);border-color:#7f1d1d"></span><span class="legend-row-label">Saberes en riesgo</span></div>`);
+  if(map.hasLayer(lyrDumps))
+    rowsPresiones.push(`<div class="legend-row"><span class="sw" style="background:#b45309;border-color:#b45309"></span><span class="legend-row-label">Tiraderos</span></div>`);
+  if(map.hasLayer(lyrFires))
+    rowsPresiones.push(`<div class="legend-row"><span class="sw" style="background:#ef4444;border-color:#ef4444"></span><span class="legend-row-label">Incendios</span></div>`);
+
+  const poisRows=[];
+  poisByCat.forEach((grp,cat)=>{
+    if(map.hasLayer(grp)){
+      const c = CAT_COLORS[cat] || '#22c55e';
+      poisRows.push(`<div class="legend-row"><span class="sw" style="background:${c};border-color:${c}"></span><span class="legend-row-label">${cat}</span></div>`);
+    }
+  });
+  if(poisRows.length){
+    rowsPOIs.push(...poisRows);
+  }
+
+  const sections=[];
+  if(rowsCorredor.length)
+    sections.push(`<div class="legend-section">
+      <div class="legend-section-title"><span class="dot" style="background:#22c55e"></span><i class="fa-solid fa-draw-polygon"></i> Corredor biocultural</div>
+      ${rowsCorredor.join('')}
+    </div>`);
+  if(rowsTejido.length)
+    sections.push(`<div class="legend-section">
+      <div class="legend-section-title"><span class="dot" style="background:#a855f7"></span><i class="fa-solid fa-people-roof"></i> Tejido biocultural</div>
+      ${rowsTejido.join('')}
+    </div>`);
+  if(rowsAgua.length)
+    sections.push(`<div class="legend-section">
+      <div class="legend-section-title"><span class="dot" style="background:#0ea5e9"></span><i class="fa-solid fa-water"></i> Agua, caminos y participación</div>
+      ${rowsAgua.join('')}
+    </div>`);
+  if(rowsPresiones.length)
+    sections.push(`<div class="legend-section">
+      <div class="legend-section-title"><span class="dot" style="background:#ef4444"></span><i class="fa-solid fa-triangle-exclamation"></i> Presiones y riesgo</div>
+      ${rowsPresiones.join('')}
+    </div>`);
+  if(rowsPOIs.length)
+    sections.push(`<div class="legend-section">
+      <div class="legend-section-title"><span class="dot" style="background:#eab308"></span><i class="fa-solid fa-landmark"></i> POIs Huitzo</div>
+      ${rowsPOIs.join('')}
+    </div>`);
+
+  Lg.innerHTML = `
+    <div class="legend-header">
+      <div class="legend-title">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>Leyenda</span>
+      </div>
+      <div class="legend-pill">
+        <span class="legend-pill-dot"></span>
+        <span>Vista de capas</span>
+      </div>
+      <button class="legend-toggle" type="button" aria-label="Colapsar leyenda">
+        <i class="fa-solid fa-chevron-down"></i>
+      </button>
+    </div>
+    <div class="legend-body">
+      ${sections.join('') || '<div style="font-size:13px;opacity:.8">Sin capas visibles.</div>'}
+    </div>
+    <div class="legend-footer">
+      <span style="opacity:.8;display:flex;align-items:center;gap:4px;">
+        <i class="fa-solid fa-circle-info"></i>
+        Mapa demostrativo · simbología orientativa
+      </span>
+      <span class="badge">
+        <i class="fa-solid fa-leaf"></i>
+        Corredor biocultural
+      </span>
+    </div>
+  `;
+}
+renderLegend();
+
+/* Toggle colapsar leyenda (delegado, porque se re-renderiza) */
+$('legend').addEventListener('click', e=>{
+  if(e.target.closest('.legend-toggle')){
+    $('legend').classList.toggle('collapsed');
+  }
+});
+
+/* ========= Control de coordenadas (cursor) ========= */
+const coordsEl = $('coords');
+map.on('mousemove', e=>{
+  const lat = e.latlng.lat.toFixed(4);
+  const lng = e.latlng.lng.toFixed(4);
+  coordsEl.textContent = `Lat: ${lat} · Lon: ${lng} (EPSG:4326)`;
+});
+
+/* ========= Utilidades ========= */
+$('btn-focus').addEventListener('click',()=>map.fitBounds(corredorBounds));
+$('btn-export-gj').addEventListener('click',()=>{
+  const files=[
+    {name:'municipios_puntos.geojson',data:fcPoints},
+    {name:'area_concava.geojson',data:polyConcave},
+    {name:'area_convexa.geojson',data:polyConvex},
+    {name:'pois_huitzo.geojson',data:poisAllGroup.toGeoJSON()}
+  ];
+  files.forEach((f,i)=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(f.data)],{type:'application/geo+json'}));
+    a.download=f.name;
+    setTimeout(()=>a.click(),i*150);
+  });
+});
+
+/* ========= Modal ========= */
+const modal = $('modal');
+$('btn-info').onclick = ()=> modal.classList.remove('hidden');
+$('modal-close').onclick = ()=> modal.classList.add('hidden');
+$('modal-ok').onclick = ()=> modal.classList.add('hidden');
+modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.classList.add('hidden'); });
+</script>
+</body>
+</html>

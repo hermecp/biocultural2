@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Geoportal Biocultural de Oaxaca</title>
+
+<!-- Leaflet + utilidades -->
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css" />
+<script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
+<script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+<!-- Iconos / fuente -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --primary:#16a34a; --primary-2:#0e7a3a; --bg:#0b0f0c; --panel:#ffffff; --b:#e7efe8; --txt:#1f2937; --glass:rgba(255,255,255,.94);
+  --c-culturales:#86efac; --c-patrimonio:#7dd3fc; --c-popular:#a7f3d0; --c-rutas:#22c55e; --c-ensenanza:#bef264; --c-zona:#facc15;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background:radial-gradient(1200px 600px at 70% -10%, #0f1a14, var(--bg));
+  color:var(--txt);
+  font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif
+}
+#app{
+  min-height:100vh;
+  display:grid;
+  grid-template-rows:66px 44px 1fr 40px;
+}
+body::after{
+  content:"";
+  position:fixed;
+  inset:auto -10% -10% -10%;
+  background:url('sello.png') center/520px no-repeat;
+  opacity:.05;
+  pointer-events:none
+}
+
+/* Header */
+header{
+  background:linear-gradient(135deg,var(--primary),var(--primary-2));
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 14px
+}
+header .brand{display:flex;align-items:center;gap:10px}
+header .brand img{height:36px;border-radius:8px}
+header .title strong{display:block;font-weight:800;letter-spacing:.2px}
+header .kpis{display:flex;gap:8px}
+header .stat{
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:12px;
+  padding:6px 10px
+}
+header .stat .v{font-weight:800}
+
+/* NAV principal */
+.nav{
+  background:#ffffff;
+  border-bottom:1px solid var(--b);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.nav a{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 12px; border-radius:999px;
+  text-decoration:none; color:#0f3d26; font-weight:600;
+  border:1px solid transparent; white-space:nowrap;
+}
+.nav a:hover{background:#f3faf6;border-color:#dcefe3}
+.nav a.active{
+  background:linear-gradient(180deg,#ecfdf5,#d1fae5);
+  color:#064e3b; border-color:#b3f0d0;
+  box-shadow:0 6px 16px rgba(5,94,40,.12);
+}
+
+/* Layout */
+main{position:relative;display:grid;grid-template-columns:420px 1fr}
+#sidebar{background:var(--panel);border-right:1px solid var(--b);overflow:auto}
+#map{position:relative}
+
+/* filtros/lista */
+.panel{padding:12px;border-bottom:1px solid var(--b)}
+.row{display:flex;gap:8px;align-items:center;margin:6px 0}
+.row input,.row select{
+  flex:1;background:#fff;border:1px solid var(--b);
+  border-radius:12px;padding:10px 12px;font-size:14px
+}
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  justify-content:center;
+  padding:9px 12px;border-radius:12px;
+  border:1px solid var(--b);
+  background:#fff;color:#111;cursor:pointer
+}
+.btn.ghost{background:transparent}
+.btn.primary{
+  background:linear-gradient(180deg,#fff,#f4fff6);
+  border-color:#dfeee3
+}
+.badge{
+  padding:2px 6px;border-radius:999px;
+  font-size:11px;border:1px solid var(--b);background:#fff
+}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 8px;border-radius:999px;
+  border:1px solid var(--b);background:#fff;
+  font-size:12px;cursor:pointer
+}
+.chip input{margin:0}
+.chip .sw{
+  display:inline-block;width:10px;height:10px;
+  border-radius:3px;border:1px solid rgba(0,0,0,.15)
+}
+#list{padding:10px}
+.card{
+  background:#fff;border:1px solid var(--b);
+  border-radius:16px;padding:10px;margin:10px 0;
+  box-shadow:0 10px 26px rgba(7,70,40,.07);
+  cursor:pointer
+}
+.card:hover{transform:translateY(-1px);transition:.2s}
+.card .title{font-weight:700;color:var(--primary)}
+.meta{
+  display:flex;gap:8px;align-items:center;
+  font-size:12px;color:#6b7280;margin-top:4px
+}
+.tag{padding:2px 6px;border-radius:999px;border:1px solid var(--b);background:#fff;font-size:11px}
+.stars{color:#fbbf24}
+.actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.card img{
+  width:100%;max-height:160px;object-fit:cover;
+  border-radius:10px;margin-top:8px
+}
+
+/* Geocoder */
+.geocoder-wrap{
+  position:absolute;left:50%;top:12px;
+  transform:translateX(-50%);
+  z-index:520;background:#fff;
+  border:1px solid var(--b);border-radius:12px;
+  padding:6px 8px;box-shadow:0 4px 16px rgba(0,0,0,.1)
+}
+.leaflet-control-geocoder{background:transparent;border:none;box-shadow:none}
+.leaflet-control-geocoder-form input{width:min(72vw,560px)}
+
+/* Leyenda + acciones */
+.legend{
+  position:absolute;left:12px;bottom:12px;
+  z-index:500;background:#fff;
+  border:1px solid var(--b);border-radius:12px;
+  padding:10px 12px;font-size:12px;min-width:230px;
+  box-shadow:0 4px 12px rgba(0,0,0,.08)
+}
+.legend .sw{
+  display:inline-block;width:14px;height:14px;
+  margin-right:6px;border:1px solid #173a34;vertical-align:middle
+}
+.map-actions{
+  position:absolute;right:12px;bottom:12px;
+  z-index:510;display:flex;flex-direction:column;gap:8px
+}
+.btn.circle{width:46px;height:46px;border-radius:999px;padding:0}
+
+/* Asistente flotante */
+#hud{
+  position:absolute;top:78px;left:50%;
+  transform:translateX(-50%);
+  z-index:540;display:block
+}
+#assistantUI{
+  width:min(980px,92vw);
+  background:linear-gradient(180deg,var(--glass),rgba(255,255,255,.9));
+  border:1px solid #deefe3;border-radius:18px;
+  box-shadow:0 28px 70px rgba(0,0,0,.22),0 2px 0 rgba(255,255,255,.5) inset;
+  overflow:hidden
+}
+.assist-header{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:10px 12px;
+  background:linear-gradient(90deg,#16a34a 0%, #19c269 60%, #a7f3d0 100%);
+  color:#06321e
+}
+.assist-left{display:flex;align-items:center;gap:10px}
+.bot{
+  width:40px;height:40px;border-radius:10px;
+  background:#fff url('sello.png') center/34px no-repeat;
+  border:1px solid #ffffff66;
+  box-shadow:0 2px 8px rgba(0,0,0,.15)
+}
+.assist-title{font-weight:800;letter-spacing:.2px}
+.assist-sub{font-size:12px;opacity:.9}
+.assist-body{padding:12px}
+
+/* Banda de investigación */
+.research-banner{
+  margin:8px 0 10px; padding:10px 12px;
+  border:2px solid #b3f0d0; background:#ecfdf5; border-radius:14px;
+  box-shadow:0 8px 18px rgba(5,94,40,.12);
+}
+.research-banner strong{
+  display:block; font-weight:800; font-size:18px; color:#064e3b; line-height:1.25;
+}
+.research-banner a{color:#0e7a3a; text-decoration:underline}
+
+/* chips de ejemplos */
+#presetChips{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 8px}
+.pchip{
+  background:#ecfdf5;border:1px solid #b3f0d0;
+  color:#065f46;font-size:12px;
+  padding:6px 10px;border-radius:999px;cursor:pointer
+}
+
+/* bloque TOP-5 */
+#liveWrap{
+  border:1px dashed #cfead7;background:#fbfffd;
+  border-radius:14px;margin-top:8px
+}
+#liveHead{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:10px 12px;cursor:pointer
+}
+#liveHead .ttl{font-weight:800;color:#0e7a3a}
+#liveHead .pill{
+  font-size:12px;border:1px solid #b3f0d0;
+  background:#ecfdf5;color:#065f46;
+  border-radius:999px;padding:3px 8px
+}
+#liveBody{display:none;padding:8px 10px 12px}
+.suggs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.sugg{
+  display:grid;grid-template-columns:142px 1fr;gap:10px;
+  border:1px solid #e6f3e8;border-radius:14px;
+  overflow:hidden;background:#fff;
+  box-shadow:0 10px 26px rgba(7,70,40,.07)
+}
+.sugg .media{position:relative}
+.sugg img{width:142px;height:108px;object-fit:cover}
+.match{
+  position:absolute;left:8px;top:8px;
+  display:flex;align-items:center;gap:6px;
+  background:linear-gradient(135deg,#22c55e,#9cf7c6);
+  color:#05351b;font-weight:800;
+  padding:2px 8px;border-radius:999px;
+  font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.15)
+}
+.ring{
+  width:22px;height:22px;border-radius:50%;
+  background:conic-gradient(#16a34a calc(var(--p)*1%), #e5e7eb 0);
+  display:inline-grid;place-items:center;
+  font-size:10px;color:#064e3b;font-weight:900
+}
+.sugg .b{padding:8px 10px}
+.sugg .p{font-weight:800;color:#0b3c2a}
+.sugg .m{font-size:12px;color:#5f7669}
+.sugg .m.reason{margin-top:4px;font-style:italic}
+.sugg .btn{padding:7px 10px}
+
+/* barra de búsqueda del asistente */
+.askbar{display:flex;gap:8px;margin-top:10px}
+.askbar input{
+  flex:1;border:1px solid #dfe9e1;
+  border-radius:999px;padding:12px 14px;font-size:14px;background:#fff
+}
+.askbar button{
+  border-radius:12px;border:1px solid #dfe9e1;
+  background:linear-gradient(180deg,#fff,#f4fff6);
+  padding:10px 12px
+}
+
+/* FAB mostrar/ocultar */
+#fab{
+  position:absolute;right:14px;top:88px;z-index:545;
+  width:48px;height:48px;border-radius:999px;
+  border:1px solid #b9e9c9;
+  background:#eafff0 url('sello.png') center/34px no-repeat;
+  box-shadow:0 10px 22px rgba(5,94,40,.25);cursor:pointer
+}
+
+/* Footer */
+footer{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:8px 12px;
+  color:#0b3c2a;background:#ecfdf5;border-top:1px solid #b3f0d0
+}
+
+/* Responsivo */
+@media(max-width:1100px){
+  main{grid-template-columns:1fr}
+  #sidebar{
+    position:absolute;z-index:600;
+    inset:12px auto auto 12px;
+    width:min(92vw,420px);max-height:82vh;
+    border-radius:12px;background:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    border:1px solid var(--b)
+  }
+  .suggs{grid-template-columns:1fr}
+  .research-banner strong{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <img src="sello.png" alt="Sello biocultural">
+      <div class="title">
+        <strong>Geoportal Biocultural de Oaxaca</strong>
+        <small>Motor de recomendaciones comunitarias • Mapa + saberes locales</small>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="stat">
+        <div style="font-size:12px;opacity:.85">POIs visibles</div>
+        <div class="v" id="kpi-vis">—</div>
+      </div>
+      <div class="stat">
+        <div style="font-size:12px;opacity:.85">Categorías</div>
+        <div class="v" id="kpi-cats">—</div>
+      </div>
+      <div class="stat">
+        <div style="font-size:12px;opacity:.85">⭐ Promedio</div>
+        <div class="v" id="kpi-avg">—</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <a href="index.html"><i class="fa-solid fa-house"></i> Inicio</a>
+    <a href="pois.html" class="active"><i class="fa-solid fa-landmark"></i> POIs &amp; Patrimonio</a>
+    <a href="modelos.html"><i class="fa-solid fa-diagram-project"></i> Modelos de idoneidad</a>
+    <a href="participacion.html"><i class="fa-solid fa-users"></i> Participación</a>
+    <a href="#"><i class="fa-solid fa-database"></i> Datos</a>
+  </nav>
+
+  <main>
+    <!-- Sidebar filtros -->
+    <aside id="sidebar">
+      <div class="panel">
+        <div class="row">
+          <input id="q" type="text" placeholder="Filtrar por nombre, descripción o lugar…" />
+          <button class="btn primary" id="btn-clear" title="Limpiar"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="row">
+          <select id="min-rate">
+            <option value="0">⭐ Mínimo (todas)</option>
+            <option value="3">⭐ 3+</option>
+            <option value="4">⭐ 4+</option>
+            <option value="4.5">⭐ 4.5+</option>
+          </select>
+          <select id="sort">
+            <option value="score">Orden: Recomendado</option>
+            <option value="rating">Orden: Mejor calificadas</option>
+            <option value="name">Orden: A-Z</option>
+            <option value="near">Orden: Cercanas</option>
+          </select>
+        </div>
+        <div style="font-size:12px;opacity:.85;margin:6px 0 4px">Categorías</div>
+        <div id="chips" class="chips"></div>
+      </div>
+      <div id="list"></div>
+    </aside>
+
+    <!-- Mapa -->
+    <div id="map">
+      <div class="geocoder-wrap" id="gc-wrap"></div>
+      <div class="legend" id="legend"></div>
+      <div class="map-actions">
+        <button class="btn circle" id="btn-focus" title="Enfocar corredores"><i class="fa-regular fa-square"></i></button>
+        <button class="btn circle" id="btn-export" title="Exportar filtrados"><i class="fa-solid fa-file-export"></i></button>
+        <button class="btn circle" id="btn-clear-routes" title="Limpiar rutas"><i class="fa-solid fa-road"></i></button>
+      </div>
+
+      <!-- FAB -->
+      <button id="fab" title="Asistente de recomendaciones"></button>
+
+      <!-- Asistente FLOTANTE -->
+      <div id="hud">
+        <div id="assistantUI" role="dialog" aria-label="Asistente comunitario">
+          <div class="assist-header">
+            <div class="assist-left">
+              <div class="bot" aria-hidden="true"></div>
+              <div>
+                <div class="assist-title">¿Cómo imaginas tu próxima experiencia biocultural en Oaxaca?</div>
+                <div class="assist-sub">Asistente de recomendaciones • Ranking Top-5</div>
+              </div>
+            </div>
+            <div class="assist-actions">
+              <button class="btn primary" id="minBtn" title="Colapsar"><i class="fa-solid fa-minus"></i></button>
+              <button class="btn primary" id="closeBtn" title="Ocultar"><i class="fa-solid fa-eye-slash"></i></button>
+            </div>
+          </div>
+
+          <div class="assist-body">
+            <div class="research-banner">
+              <strong>
+                Heurística ligera inspirada en “TourLLM: Mejorando los LLM con conocimientos turísticos” (arXiv:2407.12791) + señales comunitarias simuladas.
+              </strong>
+              <small>Consulta el preprint en <a href="https://arxiv.org/abs/2407.12791" target="_blank" rel="noopener">arXiv</a>.</small>
+            </div>
+
+            <!-- Presets -->
+            <div id="presetChips"></div>
+
+            <!-- Top-5 único y colapsable -->
+            <div id="liveWrap">
+              <div id="liveHead" title="Mostrar/ocultar resultados">
+                <div class="ttl"><i class="fa-solid fa-ranking-star"></i> Top-5 recomendaciones</div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="pill" id="activeQuery">Escribe lo que te gustaría hacer…</span>
+                  <button class="btn ghost" id="clearLive" title="Limpiar recomendaciones"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+              </div>
+              <div id="liveBody">
+                <div class="suggs" id="suggBox"></div>
+              </div>
+            </div>
+
+            <!-- búsqueda libre -->
+            <div class="askbar">
+              <input id="ask" type="text" placeholder="Describe tu plan: caminata con sombra, comida tradicional, sitio histórico, talleres…" />
+              <button id="send" title="Recomendar"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div style="display:flex;align-items:center;gap:8px">
+      <img src="sello.png" alt="Sello" style="height:24px;border-radius:6px">
+      <span>Base de conocimiento comunitaria (simulada) • Imágenes desde tus URLs</span>
+    </div>
+    <a href="#" class="privacy" style="color:#93f3c0;text-decoration:none">Aviso de privacidad</a>
+  </footer>
+</div>
+
+<script>
+/* ======== Config ======== */
+const TOP_K = 5;
+
+/* ======== Datos ======== */
+const COMMUNITY_GEOJSON = {
+  "type":"FeatureCollection",
+  "features":[
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.883497,17.277081]},"properties":{"name":"Museo Comunitario de San Pablo Huitzo (Ex Convento)","category":"espacios culturales y artísticos","description":"Museo comunitario del siglo XVI con salas de arqueología e historia local.","Lugar":"San pablo Huitzo","source_citation":"https://sic.cultura.gob.mx/ficha.php?table=museo&table_id=570","media":"San-Pablo-Huitzo-.jpg"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.884605,17.277072]},"properties":{"name":"Casa de la Cultura Federico Flores Aguilar","category":"espacios culturales y artísticos","description":"Talleres de artes, danza y música; biblioteca y auditorio.","Lugar":"San pablo Huitzo","source_citation":"https://sic.cultura.gob.mx/ficha.php?table=centro_cultural&table_id=922","media":"casa.jpeg"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.884605,17.277072]},"properties":{"name":"Biblioteca Pública Municipal Miguel Cruz Caballero","category":"espacios culturales y artísticos","description":"Lectura y préstamo; anexa a la casa de la cultura.","Lugar":"San pablo Huitzo","source_citation":"https://directorio-dgb.cultura.gob.mx/ficha.php?idbiblio=343","media":"bibloteca.png"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88334,17.27706]},"properties":{"name":"Iglesia y ex-convento de San Pablo Huitzo","category":"sitios de patrimonio","description":"Templo y claustro del XVI; actual parroquia y sede del museo.","Lugar":"San pablo Huitzo","source_citation":"https://sitiosymonumentos.cultura.gob.mx","media":"Ex Convento San Pablo Huitzo - YouTube"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88464,17.2767]},"properties":{"name":"Parque Municipal Huitzo","category":"lugares de expresión popular y tradicional","description":"Jardines, kiosco y fuente; punto de reunión.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/es/W565536990","media":"https://www.google.com/local/place/fid/0x85c6e485c0efd1a7:0xe93c72c3b4212370/photosphere?iu=https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid%3DOwRDd_MPW6y10ga7_g8_ng%26cb_client%3Dlu.gallery.gps%26w%3D160%26h%3D106%26yaw%3D322.6988%26pitch%3D0%26thumbfov%3D100&ik=CAISFk93UkRkX01QVzZ5MTBnYTdfZzhfbmc%3D"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88493,17.27739]},"properties":{"name":"Jardín del Arte","category":"lugares de expresión popular y tradicional","description":"Exposiciones al aire libre y descanso bajo sombra.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/es/W565536995","media":"Jardin del arte.png"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88361,17.27684]},"properties":{"name":"Jardín de la Fé","category":"lugares de expresión popular y tradicional","description":"Jardín pequeño con bancas y árboles.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/W566788171","media":"Jardin de la fe o exconvento.jpg"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88389,17.27722]},"properties":{"name":"Andador Ex Convento","category":"lugares de expresión popular y tradicional","description":"Andador peatonal entre el ex-convento, parque y plazas.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/W565537001","media":"Huitzo Andador.jpg"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88608,17.2753]},"properties":{"name":"Parque ‘Los Sabinos’","category":"lugares de expresión popular y tradicional","description":"Área verde arbolada para recreación y paseos.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/W566788197","media":"Parque los sabinos Huitzo.jpg"}},
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[-96.88454,17.2767]},"properties":{"name":"Fuente Municipio Huitzo","category":"lugares de expresión popular y tradicional","description":"Punto de descanso y referencia en el parque.","Lugar":"San pablo Huitzo","source_citation":"https://mapcarta.com/es/W565536991","media":"fuente Municipio Huitzo.jpg"}}
+  ]
+};
+
+/* ======== Helpers ======== */
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const slug=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$|_/g,'');
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const colorVar=v=>getComputedStyle(document.documentElement).getPropertyValue(v.replace('var(','').replace(')','')).trim();
+
+/* ======== Mapa ======== */
+const map=L.map('map',{center:[17.277,-96.884],zoom:15,zoomControl:false,preferCanvas:true});
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:20, attribution:'© OpenStreetMap, © CARTO'}).addTo(map);
+const gc=L.Control.geocoder({defaultMarkGeocode:false, placeholder:'Buscar en Oaxaca…'});
+const gcCtrl=gc.addTo(map); $('#gc-wrap').appendChild(gcCtrl.getContainer());
+gc.on('markgeocode',e=>{
+  const b=e.geocode.bbox;
+  const bb=L.latLngBounds(b.getSouthEast(),b.getNorthWest());
+  map.fitBounds(bb.pad(.12));
+});
+
+/* categorías */
+const CAT_COLORS={
+  'espacios culturales y artísticos':'var(--c-culturales)',
+  'sitios de patrimonio':'var(--c-patrimonio)',
+  'lugares de expresión popular y tradicional':'var(--c-popular)',
+  'rutas y espacios bioculturales':'var(--c-rutas)',
+  'centros de enseñanza y difusión':'var(--c-ensenanza)',
+  'Zona arqueológica':'var(--c-zona)'
+};
+function iconPOI(cat='',rating=4){
+  const c=colorVar(CAT_COLORS[cat]||'var(--c-rutas)');
+  const scale=1+clamp((rating-4)/10,-0.1,0.3);
+  const svg=`<svg viewBox="0 0 28 38" width="${28*scale}" height="${38*scale}">
+    <defs><filter id="sh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity=".2"/></filter></defs>
+    <path d="M14 2c-6.1 0-11 4.64-11 10.36 0 7.24 9.5 18.56 10.08 19.28a1.2 1.2 0 0 0 1.84 0C15.5 30.92 25 19.6 25 12.36 25 6.64 20.1 2 14 2z" fill="#fff"/>
+    <path d="M14 3.4c-5.35 0-9.65 4.07-9.65 9.1 0 6.38 8.35 16.35 8.86 16.98.33.4.95.4 1.28 0 .51-.63 8.86-10.6 8.86-16.98 0-5.03-4.3-9.1-9.65-9.1z" fill="${c}" stroke="#0f3d26" stroke-width="1" filter="url(#sh)"/>
+    <circle cx="14" cy="12.5" r="3.2" fill="rgba(255,255,255,.95)"/></svg>`;
+  return L.divIcon({className:'',html:svg,iconSize:[28*scale,38*scale],iconAnchor:[14*scale,38*scale]});
+}
+function stars(n){
+  if(!n) return '—';
+  const f=Math.floor(n), h=(n-f)>=0.5?1:0, e=5-f-h;
+  return '★'.repeat(f)+(h?'½':'')+'☆'.repeat(e);
+}
+const imgFromMedia=m=>String(m||'');
+
+/* ======== DB + señales simuladas ======== */
+const REV_KEY='oax_reviews_v5'; const VIS_KEY='oax_covisits_v5';
+let DB=COMMUNITY_GEOJSON.features.map(f=>({
+  id:slug(f.properties.name)+'-'+Math.abs((f.geometry.coordinates[0]*100000|0)),
+  geometry:f.geometry,
+  properties:f.properties
+}));
+if(!localStorage.getItem(REV_KEY)){
+  const fake={};
+  DB.forEach(p=>{
+    const n=3+(Math.random()*4|0);
+    fake[p.id]=Array.from({length:n}).map(()=>({
+      user:['Ana','Luis','Mar','Dani','Fer','Itzel','Leo','Sofi'][Math.random()*8|0],
+      stars:[5,4.5,4,3.5,3][Math.random()*5|0],
+      text:['Tranquilo','Sombras','Fotos','Tradición','Atención amable'][Math.random()*5|0],
+      ts:Date.now()-(Math.random()*86400*1000*50|0)
+    }));
+  });
+  localStorage.setItem(REV_KEY, JSON.stringify(fake));
+}
+if(!localStorage.getItem(VIS_KEY)) localStorage.setItem(VIS_KEY, JSON.stringify({}));
+const getReviews=id=>JSON.parse(localStorage.getItem(REV_KEY)||'{}')[id]||[];
+function ratingFor(id){
+  const rs=getReviews(id);
+  if(!rs.length) return {avg:0,n:0,trend:0};
+  const now=Date.now();
+  let s=0,w=0;
+  rs.forEach(r=>{
+    const a=(now-r.ts)/(86400*1000),wt=1/Math.max(1,a*0.7);
+    s+=r.stars*wt; w+=wt;
+  });
+  const score=s/w;
+  return {avg:+score.toFixed(2), n:rs.length, trend:+(score*Math.log10(rs.length+1)).toFixed(3)};
+}
+function markCoVisit(a,b){
+  if(a===b) return;
+  const co=JSON.parse(localStorage.getItem(VIS_KEY)||'{}');
+  co[a]=co[a]||{}; co[a][b]=(co[a][b]||0)+1;
+  co[b]=co[b]||{}; co[b][a]=(co[b][a]||0)+1;
+  localStorage.setItem(VIS_KEY, JSON.stringify(co));
+}
+const getCo=id=>JSON.parse(localStorage.getItem(VIS_KEY)||'{}')[id]||{};
+
+/* ======== UI / filtros ======== */
+const cluster=L.markerClusterGroup({disableClusteringAtZoom:16}).addTo(map);
+const routesLayer=L.layerGroup().addTo(map);
+let markersIndex=[]; let activeCats=[]; let myPos=null;
+
+function buildChips(){
+  const set=new Set(DB.map(p=>p.properties.category));
+  const box=$('#chips'); box.innerHTML='';
+  set.forEach(c=>{
+    const el=document.createElement('label'); el.className='chip';
+    const color=colorVar(CAT_COLORS[c]);
+    el.innerHTML=`<input type="checkbox" value="${c}" checked>
+      <span class="sw" style="background:${color}"></span>${c}`;
+    box.appendChild(el);
+  });
+  activeCats=[...set];
+  $$('#chips input').forEach(ch=>ch.addEventListener('change',()=>{
+    const v=ch.value;
+    if(ch.checked){ if(!activeCats.includes(v)) activeCats.push(v); }
+    else{ activeCats=activeCats.filter(x=>x!==v); }
+    render();
+  }));
+}
+function filterAll(){
+  const q=$('#q').value.trim().toLowerCase();
+  const min=parseFloat($('#min-rate').value||'0');
+  return DB.filter(p=>{
+    const {avg}=ratingFor(p.id);
+    const inCats=activeCats.length===0?true:activeCats.includes(p.properties.category);
+    const inText=!q||[p.properties.name,p.properties.description,p.properties.Lugar,p.properties.category]
+      .some(v=>String(v||'').toLowerCase().includes(q));
+    return inCats&&inText&&(avg>=min||(min===0&&avg===0));
+  });
+}
+function sortItems(arr){
+  const how=$('#sort').value;
+  if(how==='name') return arr.sort((a,b)=>a.properties.name.localeCompare(b.properties.name));
+  if(how==='rating') return arr.sort((a,b)=>ratingFor(b.id).avg-ratingFor(a.id).avg);
+  if(how==='near'&&myPos){
+    return arr.sort((a,b)=>
+      turf.distance([a.geometry.coordinates[0],a.geometry.coordinates[1]],[myPos[1],myPos[0]])-
+      turf.distance([b.geometry.coordinates[0],b.geometry.coordinates[1]],[myPos[1],myPos[0]]));
+  }
+  return arr.sort((a,b)=>{
+    const sb=ratingFor(b.id).trend+Object.values(getCo(b.id)).reduce((s,x)=>s+x,0)*0.02;
+    const sa=ratingFor(a.id).trend+Object.values(getCo(a.id)).reduce((s,x)=>s+x,0)*0.02;
+    return sb-sa;
+  });
+}
+function popupHTML(p,ll){
+  const r=ratingFor(p.id), img=imgFromMedia(p.properties.media);
+  const sello=(r.avg>=4.5&&r.n>=3)?`<span class="badge"><img src="sello.png" style="height:14px;vertical-align:middle;margin-right:4px">Sello colectivo</span>`:'';
+  return `<div style="min-width:240px;max-width:280px">
+    <strong>${p.properties.name}</strong>
+    <div class="meta">
+      <span class="tag">${p.properties.category}</span>
+      <span>${r.avg?('★ '+r.avg):'—'} (${r.n})</span> ${sello}
+    </div>
+    <div style="margin-top:6px">${p.properties.description||''}</div>
+    ${img?`<div style="margin-top:6px"><img src="${img}" onerror="this.style.display='none'" style="max-width:240px;border-radius:10px"></div>`:''}
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn" onclick="selectPlace('${p.id}',true)"><i class="fa-solid fa-location-dot"></i> Enfocar</button>
+      <a class="btn" href="${p.properties.source_citation||'#'}" target="_blank" rel="noopener">Fuente</a>
+    </div>
+  </div>`;
+}
+function featureToMarker(p){
+  const [x,y]=p.geometry.coordinates;
+  const ll=L.latLng(y,x);
+  const r=ratingFor(p.id);
+  const m=L.marker(ll,{icon:iconPOI(p.properties.category,r.avg||4),riseOnHover:true});
+  m.bindPopup(popupHTML(p,ll));
+  return m;
+}
+function renderMap(list){
+  cluster.clearLayers(); markersIndex=[];
+  list.forEach(p=>{
+    const m=featureToMarker(p);
+    cluster.addLayer(m);
+    markersIndex.push({id:p.id, marker:m, data:p});
+  });
+}
+function cardHTML(p){
+  const r=ratingFor(p.id), color=colorVar(CAT_COLORS[p.properties.category]||'var(--c-rutas)');
+  const img=imgFromMedia(p.properties.media);
+  const desc=(p.properties.description||'');
+  return `<div class="card" data-id="${p.id}" style="border-color:${color}33; box-shadow:0 10px 26px ${color}33;">
+    <div class="title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>${p.properties.name}</span>
+      <span class="badge" style="border-color:${color};color:#064e3b;background:${color}22">${p.properties.category}</span>
+    </div>
+    <div class="meta"><span class="stars">${stars(r.avg)}</span> <span>${r.avg||'—'} • ${r.n} reseñas</span></div>
+    <p style="margin-top:6px;opacity:.9">${desc.slice(0,160)}${desc.length>160?'…':''}</p>
+    ${img?`<img src="${img}" onerror="this.style.display='none'">`:''}
+    <div class="actions">
+      <button class="btn" data-act="ver"><i class="fa-solid fa-magnifying-glass-location"></i> Ver</button>
+      <button class="btn" data-act="resena"><i class="fa-solid fa-pen"></i> Reseñar</button>
+      <button class="btn ghost" data-act="ruta"><i class="fa-solid fa-route"></i> Ruta</button>
+    </div>
+  </div>`;
+}
+function renderList(list){
+  const box=$('#list'); box.innerHTML='';
+  const frag=document.createDocumentFragment();
+  list.forEach(p=>{
+    const el=document.createElement('div'); el.innerHTML=cardHTML(p);
+    const card=el.firstElementChild;
+    card.addEventListener('click',e=>{
+      const act=e.target.closest('button')?.dataset?.act;
+      const mk=markersIndex.find(k=>k.id===p.id);
+      if(act==='ver'){
+        map.flyTo(mk.marker.getLatLng(),17,{duration:.6});
+        mk.marker.openPopup();
+        selectPlace(p.id);
+      }else if(act==='resena'){ quickReview(p.id); }
+      else if(act==='ruta'){ routeTo(p.id); }
+    });
+    frag.appendChild(card);
+  });
+  box.appendChild(frag);
+}
+function renderKPIs(list){
+  $('#kpi-vis').textContent=list.length;
+  $('#kpi-cats').textContent=new Set(list.map(p=>p.properties.category)).size;
+  const all=list.map(p=>ratingFor(p.id)).filter(r=>r.n>0);
+  $('#kpi-avg').textContent=all.length? (all.reduce((a,b)=>a+b.avg,0)/all.length).toFixed(2):'—';
+}
+function renderLegend(){
+  const rows=[`<div style="margin-bottom:4px"><b>Categorías</b></div>`];
+  Object.entries(CAT_COLORS).forEach(([k,v])=>{
+    const real=colorVar(v);
+    rows.push(`<div><span class="sw" style="background:${real};border-color:${real}"></span> ${k}</div>`);
+  });
+  rows.push(`<div style="margin-top:6px"><b>Rutas</b><div>Se dibujan sobre el mapa con el color del destino.</div></div>`);
+  $('#legend').innerHTML=`<strong>Leyenda</strong><div style="margin-top:6px">${rows.join('')}</div>`;
+}
+
+/* ======== Recomendador ======== */
+const KEYMAP=[
+  {keys:['historia','convento','museo','arqueología','arqueologico','zapoteco','zona'],cat:'sitios de patrimonio|espacios culturales y artísticos|Zona arqueológica'},
+  {keys:['mercado','antojitos','comida','tlayudas','atole','tamales','tradicional'],cat:'lugares de expresión popular y tradicional'},
+  {keys:['caminar','sendero','ruta','sombras','sombra','árboles','arboles','parque','andador','jardín','jardin'],cat:'rutas y espacios bioculturales|lugares de expresión popular y tradicional'},
+  {keys:['taller','curso','gráfica','grafica','arte','cultura'],cat:'espacios culturales y artísticos|centros de enseñanza y difusión'}
+];
+const tokenize=t=>t.toLowerCase().split(/[^a-záéíóúñü0-9]+/i).filter(Boolean);
+
+function scoreText(p,toks){
+  let s=0;
+  const text=(p.properties.name+' '+p.properties.description+' '+p.properties.category).toLowerCase();
+  toks.forEach(k=>{ if(text.includes(k)) s+=0.6; });
+  KEYMAP.forEach(rule=>{
+    if(rule.keys.some(k=>toks.includes(k))){
+      const cats=rule.cat.split('|');
+      if(cats.includes(p.properties.category)) s+=1.2;
+    }
+  });
+  if(toks.includes('sombra')||toks.includes('sombras')){
+    s+=p.properties.name.toLowerCase().includes('jardín')||p.properties.name.toLowerCase().includes('jardin')?0.5:0.2;
+  }
+  return s;
+}
+
+/* explicación de recomendación */
+function buildReason(p,toks,rating,distKm){
+  const reasons=[];
+  const text=(p.properties.name+' '+p.properties.description+' '+p.properties.category).toLowerCase();
+
+  if(toks.some(t=>['historia','convento','museo','arqueología','arqueologico','zona'].includes(t)) &&
+     (/museo|convento|iglesia|zona/.test(text))){
+    reasons.push('por su valor histórico y patrimonial');
+  }
+  if(toks.some(t=>['caminar','sendero','sombras','sombra','parque','andador','jardín','jardin','árboles','arboles'].includes(t)) &&
+     (/parque|jardín|jardin|andador/.test(text))){
+    reasons.push('porque ofrece espacios para caminar con sombra y áreas verdes');
+  }
+  if(toks.some(t=>['comida','mercado','antojitos','tradicional','tlayudas','tamales','atole'].includes(t)) &&
+     (/mercado|comida|antojitos/.test(text))){
+    reasons.push('porque conecta con espacios de comida y convivencia tradicional');
+  }
+  if(toks.some(t=>['taller','curso','arte','gráfica','grafica','cultura'].includes(t)) &&
+     (/cultura|taller|casa de la cultura|arte/.test(text))){
+    reasons.push('porque se realizan talleres o actividades artísticas');
+  }
+
+  if(rating.avg>=4.3 && rating.n>=3){
+    reasons.push('muy bien valorado por otras personas de la comunidad');
+  }
+  if(distKm!=null && distKm<1.2){
+    reasons.push('queda relativamente cerca de tu ubicación');
+  }
+
+  const uniq=[...new Set(reasons)];
+  if(!uniq.length){
+    return 'por la combinación entre tu búsqueda, la categoría y las valoraciones comunitarias';
+  }
+  return uniq.slice(0,2).join(' y ');
+}
+
+function distanceScoreKm(p){
+  if(!myPos) return {score:0,km:null};
+  const km=turf.distance(
+    [p.geometry.coordinates[0],p.geometry.coordinates[1]],
+    [myPos[1],myPos[0]]
+  );
+  return {score:1/(1+km), km};
+}
+
+function recommend(query,k=TOP_K){
+  const toks=tokenize(query);
+  const all=DB.map(p=>{
+    const r=ratingFor(p.id);
+    const txtScore=scoreText(p,toks);
+    const {score:distScore,km} = distanceScoreKm(p);
+    const rankScore=Object.values(getCo(p.id)).reduce((s,x)=>s+x,0)*0.02;
+    const s=0.52*txtScore + 0.18*distScore + 0.22*((r.avg||3.8)/5) + 0.08*((r.trend||0)/5) + rankScore;
+    const match=Math.round(clamp(s/2.2,0,1)*100);
+    const reason=buildReason(p,toks,r,km);
+    return {p,score:s,match,reason};
+  });
+  return all.sort((a,b)=>b.score-a.score).slice(0,k);
+}
+
+function suggestionCard(p,match,reason){
+  const img=imgFromMedia(p.properties.media);
+  const desc=(p.properties.description||'');
+  return `<div class="sugg">
+    <div class="media">
+      ${img?`<img src="${img}" onerror="this.style.display='none'">`:''}
+      <div class="match" style="--p:${match}" title="Porcentaje de afinidad con tu búsqueda">
+        <span class="ring">${match}<small>%</small></span> Recomendado
+      </div>
+    </div>
+    <div class="b">
+      <div class="p"><a href="javascript:void(0)">${p.properties.name}</a></div>
+      <div class="m">${p.properties.category}</div>
+      <div class="m reason">Te lo recomendamos ${reason}.</div>
+      <div class="m" style="margin-top:4px">${desc.slice(0,140)}${desc.length>140?'…':''}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn" data-id="${p.id}"><i class="fa-solid fa-location-dot"></i> Ver en mapa</button>
+        <button class="btn" data-id="${p.id}" data-ruta="1"><i class="fa-solid fa-route"></i> Ruta aquí</button>
+        <a class="btn" href="${p.properties.source_citation||'#'}" target="_blank" rel="noopener">Fuente</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSuggestions(q){
+  $('#activeQuery').textContent=q;
+  const body=$('#liveBody'); body.style.display='block';
+  const box=$('#suggBox'); box.innerHTML='';
+  recommend(q,TOP_K).forEach(({p,match,reason})=>{
+    const wrap=document.createElement('div');
+    wrap.innerHTML=suggestionCard(p,match,reason);
+    const node=wrap.firstElementChild;
+    node.querySelectorAll('button[data-id]').forEach(btn=>{
+      btn.addEventListener('click',(e)=>{
+        const id=e.target.closest('button').dataset.id;
+        if(e.target.closest('button').dataset.ruta) routeTo(id);
+        else selectPlace(id,true);
+      });
+    });
+    box.appendChild(node);
+  });
+}
+
+/* ======== Presets ======== */
+const PRESETS=[
+  {t:'Caminata con sombra + comida tradicional', q:'caminata con sombra y mercado tradicional cercano'},
+  {t:'Historia, fotos y zona arqueológica', q:'historia colonial fotos zona arqueológica'},
+  {t:'Para ir con niñas y niños', q:'parque con juegos y áreas verdes para familias'},
+  {t:'Taller o actividad artística', q:'taller de arte gráfica aprender'}
+];
+function buildPresetChips(){
+  const box=$('#presetChips'); box.innerHTML='';
+  PRESETS.forEach(p=>{
+    const b=document.createElement('button'); b.className='pchip'; b.textContent=p.t;
+    b.addEventListener('click',()=>{
+      $('#ask').value=p.q;
+      renderSuggestions(p.q);
+    });
+    box.appendChild(b);
+  });
+}
+
+/* ======== Acciones ======== */
+function render(){
+  const list=sortItems(filterAll());
+  renderMap(list); renderList(list); renderKPIs(list);
+}
+$('#q').addEventListener('input', render);
+$('#btn-clear').addEventListener('click',()=>{$('#q').value=''; render();});
+$('#min-rate').addEventListener('change', render);
+$('#sort').addEventListener('change', render);
+$('#btn-focus').addEventListener('click',()=> map.fitBounds(cluster.getBounds().pad(.12)));
+$('#btn-export').addEventListener('click',()=>{
+  const feats=filterAll().map(p=>({type:'Feature',geometry:p.geometry,properties:p.properties}));
+  const fc={type:'FeatureCollection',features:feats};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(fc)],{type:'application/geo+json'}));
+  a.download='oaxaca_filtrados.geojson'; a.click();
+});
+$('#btn-clear-routes').addEventListener('click',()=> routesLayer.clearLayers());
+$('#send').addEventListener('click',()=>{
+  const v=$('#ask').value.trim();
+  if(v) renderSuggestions(v);
+});
+$('#ask').addEventListener('keydown',e=>{
+  if(e.key==='Enter') $('#send').click();
+});
+
+/* Top-5: colapsar/limpiar */
+$('#liveHead').addEventListener('click', e=>{
+  if(e.target.id==='clearLive' || e.target.closest('#clearLive')) return;
+  const body=$('#liveBody');
+  body.style.display = (body.style.display==='none'?'block':'none');
+});
+$('#clearLive').addEventListener('click',()=>{
+  $('#activeQuery').textContent='Escribe lo que te gustaría hacer…';
+  $('#suggBox').innerHTML='';
+  $('#liveBody').style.display='none';
+});
+
+/* selección */
+function selectPlace(id,fly=false){
+  const mk=markersIndex.find(k=>k.id===id);
+  if(!mk) return;
+  if(fly){
+    map.flyTo(mk.marker.getLatLng(),17,{duration:.6});
+    mk.marker.openPopup();
+  }
+  if(window.__lastViewed&&window.__lastViewed!==id) markCoVisit(window.__lastViewed,id);
+  window.__lastViewed=id;
+}
+function quickReview(id){
+  const name=prompt('Tu nombre (opcional):','Anónimo')||'Anónimo';
+  const stars=parseFloat(prompt('Calificación (1–5):','5'))||5;
+  const text=prompt('Comentario:','Muy bonito');
+  if(!stars) return;
+  const all=JSON.parse(localStorage.getItem(REV_KEY)||'{}');
+  all[id]=[...(all[id]||[]),{user:name,stars,text,ts:Date.now()}];
+  localStorage.setItem(REV_KEY, JSON.stringify(all));
+  render();
+}
+
+/* Rutas */
+async function routeTo(id){
+  const poi=DB.find(x=>x.id===id); if(!poi) return;
+  if(!myPos){
+    alert('Activa tu ubicación para trazar la ruta.');
+    return;
+  }
+  const start=[myPos[1], myPos[0]], end=[poi.geometry.coordinates[0], poi.geometry.coordinates[1]];
+  const col=colorVar(CAT_COLORS[poi.properties.category]||'var(--c-rutas)');
+  const url=`https://router.project-osrm.org/route/v1/foot/${start[0]},${start[1]};${end[0]},${end[1]}?overview=full&geometries=geojson`;
+  try{
+    const r=await fetch(url); const j=await r.json();
+    routesLayer.clearLayers();
+    if(j.routes && j.routes[0]){
+      const line=L.geoJSON(j.routes[0].geometry,{style:{color:col,weight:5,opacity:0.95}}).addTo(routesLayer);
+      L.circleMarker([myPos[0],myPos[1]],{radius:5,color:'#064e3b',fillColor:'#ecfdf5',fillOpacity:1,weight:2}).addTo(routesLayer);
+      L.circleMarker([end[1],end[0]],{radius:6,color:col,fillColor:'#fff',fillOpacity:1,weight:2}).addTo(routesLayer);
+      map.fitBounds(line.getBounds().pad(.15));
+      return;
+    }
+    throw new Error('no route');
+  }catch(e){
+    const gc = turf.greatCircle([start[0],start[1]],[end[0],end[1]]);
+    const line=L.geoJSON(gc,{style:{color:col,weight:4,opacity:0.9,dashArray:'6,6'}}).addTo(routesLayer);
+    map.fitBounds(line.getBounds().pad(.15));
+  }
+}
+
+/* Mostrar/ocultar asistente */
+const hud=$('#hud'), ui=$('#assistantUI'), fab=$('#fab'), minBtn=$('#minBtn'), closeBtn=$('#closeBtn');
+let minimized=false;
+fab.addEventListener('click',()=>{
+  hud.style.display = (hud.style.display==='none'?'block':'none');
+});
+minBtn.addEventListener('click',()=>{
+  minimized=!minimized;
+  ui.querySelector('.assist-body').style.display = minimized?'none':'block';
+  minBtn.innerHTML=minimized?'<i class="fa-solid fa-up-right-and-down-left-from-center"></i>':'<i class="fa-solid fa-minus"></i>';
+});
+closeBtn.addEventListener('click',()=>{ hud.style.display='none'; });
+
+/* Inicio */
+function init(){
+  buildChips(); renderLegend(); render();
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      myPos=[pos.coords.latitude,pos.coords.longitude];
+    });
+  }
+  buildPresetChips();
+  $('#liveBody').style.display='none';
+}
+init();
+</script>
+</body>
+</html>
